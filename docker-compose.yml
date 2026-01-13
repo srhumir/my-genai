@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  chatbot:
+    image:
+    ports:
+      - "8000:8002"
+    environment:
+      - mcp_server_url=http://mcp:8001/mcp
+      - CHAINLIT_AUTH_SECRET
+      - OPEN_AI_API_KEY
+      - CHAINLIT_URL
+      - CHAINLIT_LOG_LEVEL
+      - PYTHONUNBUFFERED
+    depends_on:
+      - mcp
+    networks:
+      - chatbotnet
+
+  mcp:
+    image:
+    ports:
+      - "8001:8001"
+    environment:
+      - ENVIRONMENT
+    networks:
+      - chatbotnet
+
+networks:
+  chatbotnet:
+    driver: bridge
