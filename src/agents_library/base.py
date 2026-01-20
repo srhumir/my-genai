@@ -1,0 +1,155 @@
+import asyncio
+import json
+from dataclasses import dataclass
+from logging import getLogger
+from pathlib import Path
+from typing import Any, cast, Type
+
+import httpcore
+import httpx
+from litellm import BadRequestError, ChatCompletionToolParam
+from pydantic import BaseModel
+
+from src.agents_library.memory import ConversationMemory
+from src.api_client.chat_client import ChatClient
+from src.config.settings import Settings
+from src.mcp_client.client import MCPClient
+
+logger = getLogger(__name__)
+
+
+@dataclass
+class ChatSessionConfig:
+    bot_user_name: str
+    session_id: str
+    topic_id: str
+
+class BaseChatResponse(BaseModel):
+    text_response: str
+
+class BaseAgent:
+    def __init__(
+        self,
+        settings: Settings,
+        session_config: ChatSessionConfig,
+        memory: ConversationMemory,
+        agent_folder_path: str,
+    ) -> None:
+        """
+        Initialize a BaseAgent that orchestrates LLM chat interactions with optional MCP tooling.
+
+        This class manages conversation memory, builds system prompts, calls the chat client,
+        and executes MCP tools requested by the LLM. It also caches available MCP tools.
+
+        Args:
+            settings: Global application settings including agent_config (model, tools, paths).
+            session_config: Per-chat session configuration such as response language and bot name.
+            memory: ConversationMemory used to store user/assistant messages and tool results.
+        """
+        self.settings = settings
+        self.session_config = session_config
+        self.memory = memory
+        self.agent_folder_path = agent_folder_path
+        self._cached_tools: list[ChatCompletionToolParam] | None = None
+        self._client = ChatClient(settings)
+
+    async def get_system_prompt(self) -> str:
+        """Generate the system prompt for the agent by loading system_prompt.md and applying replacements."""
+        folder = Path(self.agent_folder_path)
+        prompt_path = folder / "system_prompt.md"
+        if not prompt_path.exists():
+            raise FileNotFoundError(f"system_prompt.md not found at: {prompt_path}")
+        content = prompt_path.read_text(encoding="utf-8")
+
+        replace_vars = getattr(self.settings.agent_config, "replace_variables", None)
+        if replace_vars:
+            for key, value in replace_vars.items():
+                content = content.replace(f"{{{key}}}", str(value))
+
+        return content
+
+    @property
+    async def tools(self) -> list[ChatCompletionToolParam]:
+        """Fetch and cache MCP tools filtered by settings.agent_config.my_mcp_tools."""
+        if self.settings.agent_config.my_mcp_tools is None:
+            self._cached_tools = []
+        if self._cached_tools is not None:
+            return self._cached_tools
+
+        async with MCPClient() as mcp_client:
+            all_mcp_tools: list[ChatCompletionToolParam] = await mcp_client.get_openai_tools()
+
+        allowed = set(self.settings.agent_config.my_mcp_tools or [])
+        if allowed:
+            filtered = [t for t in all_mcp_tools if getattr(t, "function", None) and t.function.name in allowed]
+        else:
+            filtered = all_mcp_tools
+
+        self._cached_tools = filtered
+        return self._cached_tools
+
+    async def prepare_response(self, message: str, response_format: Type[BaseChatResponse]=BaseChatResponse) -> str:
+        self.memory.add_user(message)
+        logger.info("Initial call to model via LiteLLM")
+        await self._call_llm(tool_choice="auto", response_format=response_format)
+        assistant_message = cast(dict[str, Any], self.memory.messages[-1])
+        if assistant_message.get("tool_calls"):
+            await self._add_tool_results_to_memory(assistant_message)
+            logger.info("Final call to model after tool calls")
+            await self._call_llm(tool_choice="none", response_format=response_format)
+
+        output = response_format.model_validate_json(self.memory.messages[-1].get("content"))
+        return output.text_response
+
+    async def _call_llm(self, *, tool_choice: Any, response_format: Type[BaseChatResponse]) -> None:
+        tools = await self.tools
+        system_prompt = await self.get_system_prompt()
+        try:
+            response = self._client.chat(
+                self.memory.build_messages(system_prompt), tools=tools, tool_choice=tool_choice, response_format=response_format
+            )
+        except BadRequestError:
+            logger.exception("LLM call failed; shrinking memory and retrying")
+            self.memory.shrink_messages_to_fit_token_limit(True)
+            response = self._client.chat(
+                self.memory.build_messages(system_prompt), tools=tools, tool_choice=tool_choice, response_format=response_format
+            )
+
+        msg = response.choices[0].message
+        assistant_dict: dict[str, Any] = {"role": "assistant", "content": getattr(msg, "content", None)}
+        tool_calls = getattr(msg, "tool_calls", None)
+        if tool_calls:
+            assistant_dict["tool_calls"] = []
+            for tc in tool_calls:
+                fn = getattr(tc, "function", None)
+                assistant_dict["tool_calls"].append(
+                    {
+                        "id": getattr(tc, "id", None),
+                        "type": getattr(tc, "type", "function"),
+                        "function": {
+                            "name": getattr(fn, "name", None),
+                            "arguments": getattr(fn, "arguments", None),
+                        },
+                    }
+                )
+        self.memory.add_assistant(assistant_dict)
+
+    async def _add_tool_results_to_memory(self, assistant_message: dict[str, Any]) -> None:
+        tool_calls = assistant_message.get("tool_calls") or []
+        tool_call_list = []
+        tool_call_id_list = []
+        async with MCPClient() as mcp_client:
+            for tool_call in tool_calls:
+                fn = tool_call.get("function") or {}
+                name = fn.get("name")
+                arguments = fn.get("arguments") or "{}"
+                try:
+                    args_dict = json.loads(arguments) if isinstance(arguments, str) else arguments
+                except json.JSONDecodeError:
+                    args_dict = {}
+                logger.info(f"Calling tool: {name} with args: {args_dict}")
+                tool_call_list.append(mcp_client.call(name, args=args_dict))
+                tool_call_id_list.append(tool_call.get("id"))
+
+            for result, tool_call_id in zip(await asyncio.gather(*tool_call_list), tool_call_id_list):
+                self.memory.add_tool_result(tool_call_id or "", result=str(result))

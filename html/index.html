@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>App Services</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; line-height: 1.6; }
+      h1 { margin-bottom: 0.5rem; }
+      ul { padding-left: 1.25rem; }
+      a { color: #0b62a4; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .desc { color: #333; }
+      .empty { color: #666; font-style: italic; }
+      .svc-desc { color: #555; margin-left: 0.5rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Available Services</h1>
+    <p class="desc">Choose a service to continue:</p>
+    <ul id="services"></ul>
+    <p id="empty" class="empty" style="display:none;">No services available.</p>
+
+    <script>
+      async function loadServices() {
+        try {
+          const res = await fetch('/api/services');
+          const data = await res.json();
+          const list = document.getElementById('services');
+          const empty = document.getElementById('empty');
+
+          list.innerHTML = '';
+          if (!data.services || data.services.length === 0) {
+            empty.style.display = 'block';
+            return;
+          }
+          empty.style.display = 'none';
+
+          data.services.forEach(svc => {
+            const li = document.createElement('li');
+
+            const a = document.createElement('a');
+            a.href = svc.path;
+            a.textContent = svc.name || svc.path;
+            li.appendChild(a);
+
+            // Add description after the anchor (inline), if available
+            if (svc.description) {
+              const desc = document.createElement('span');
+              desc.className = 'svc-desc';
+              desc.textContent = svc.description;
+              li.appendChild(desc);
+            }
+
+            list.appendChild(li);
+          });
+        } catch (e) {
+          console.error('Failed to load services', e);
+          document.getElementById('empty').textContent = 'Failed to load services.';
+          document.getElementById('empty').style.display = 'block';
+        }
+      }
+      loadServices();
+    </script>
+  </body>
+</html>

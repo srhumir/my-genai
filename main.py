@@ -1,14 +1,19 @@
 from chainlit.utils import mount_chainlit
+from docutils.nodes import description
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+import os
+from pathlib import Path
+from src.agents_library import ChatSessionConfig, load_agents
+from src.config.settings import settings
 
 app = FastAPI()
 
 services: list[dict[str, str]] = []
 
 
-def register_service(name: str, path: str, target: str) -> None:
+def register_service(name: str, path: str, target: str, description: str) -> None:
     """Mounts a Chainlit service to the FastAPI app and registers its metadata.
 
     Args:
@@ -17,7 +22,7 @@ def register_service(name: str, path: str, target: str) -> None:
         target (str): Python file containing the Chainlit app.
     """
     mount_chainlit(app=app, target=target, path=path)
-    services.append({"name": name, "path": path})
+    services.append({"name": name, "path": path, "description": description})
 
 
 app.mount("/welcome", StaticFiles(directory="html", html=True), name="html")
@@ -35,6 +40,27 @@ def root() -> RedirectResponse:
     return RedirectResponse(url="/welcome/")
 
 
-register_service(
-    name="Service Engineer", path="/service_engineer", target="chainlit_service_engineer.py"
-)
+session_config = ChatSessionConfig(
+        bot_user_name="TestBot",
+        session_id="session_123",
+        topic_id="topic_abc",
+    )
+
+agents = load_agents(settings, session_config)
+
+base_path = Path("./chainlit_pages/base.py")
+
+for agent in agents:
+    agent_name = agent.settings.agent_config.name
+    clean_name = agent_name.lower().replace(" ", "_")
+    agent_path = agent.agent_folder_path
+    target_file = Path(f"./chainlit_pages/{clean_name}.py")
+    # breakpoint()
+    with open(base_path, "r", encoding="utf-8") as f:
+        content = f.read().replace("$AGENT", os.path.split(agent_path)[-1])
+    with open(target_file, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    register_service(
+        name=agent_name, path=f"/{clean_name}", target=f"./chainlit_pages/{clean_name}.py", description=agent.settings.agent_config.description
+    )
