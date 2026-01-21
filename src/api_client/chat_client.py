@@ -1,10 +1,12 @@
 from __future__ import annotations
-from pydantic import BaseModel
-from typing import Any, Type
+
+from typing import Any
 
 import litellm
+from pydantic import BaseModel
 
-from src.config.settings import settings, Settings
+from src.config.settings import Settings, settings
+
 
 class ChatMessage(BaseModel):
     role: str
@@ -24,8 +26,7 @@ class ChatClient:
         *,
         tools: list[Any] | None = None,
         tool_choice: Any | None = "auto",
-        response_format: Type[BaseModel] = ChatMessage,
-
+        response_format: type[BaseModel] = ChatMessage,
     ) -> litellm.ModelResponse:
         """Call the underlying model and return the raw LiteLLM response.
 
@@ -34,6 +35,7 @@ class ChatClient:
             tools: Optional OpenAI-compatible tools list.
             tool_choice: Tool choice option (e.g., "auto", "none", or a specific tool spec).
             response_format: Pydantic model to parse the response into.
+
         Returns:
             The LiteLLM ModelResponse object (OpenAI-style).
         """
@@ -54,13 +56,14 @@ class ChatClient:
         )
         return resp
 
+
 if __name__ == "__main__":
     agent_config = settings.agent_config
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "List 5 important events in the XIX century"}
+        {"role": "user", "content": "List 5 important events in the XIX century"},
     ]
     client = ChatClient(settings)
-    resp  = client.chat(messages)
+    resp = client.chat(messages)
 
     print(resp)

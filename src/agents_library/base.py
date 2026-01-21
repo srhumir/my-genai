@@ -3,10 +3,8 @@ import json
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
-from typing import Any, cast, Type
+from typing import Any, cast
 
-import httpcore
-import httpx
 from litellm import BadRequestError, ChatCompletionToolParam
 from pydantic import BaseModel
 
@@ -24,8 +22,10 @@ class ChatSessionConfig:
     session_id: str
     topic_id: str
 
+
 class BaseChatResponse(BaseModel):
     text_response: str
+
 
 class BaseAgent:
     def __init__(
@@ -35,8 +35,7 @@ class BaseAgent:
         memory: ConversationMemory,
         agent_folder_path: str,
     ) -> None:
-        """
-        Initialize a BaseAgent that orchestrates LLM chat interactions with optional MCP tooling.
+        """Initialize a BaseAgent that orchestrates LLM chat interactions with optional MCP tooling.
 
         This class manages conversation memory, builds system prompts, calls the chat client,
         and executes MCP tools requested by the LLM. It also caches available MCP tools.
@@ -45,6 +44,7 @@ class BaseAgent:
             settings: Global application settings including agent_config (model, tools, paths).
             session_config: Per-chat session configuration such as response language and bot name.
             memory: ConversationMemory used to store user/assistant messages and tool results.
+            agent_folder_path: relative path to the folder containing agent config and prompt.
         """
         self.settings = settings
         self.session_config = session_config
@@ -77,18 +77,26 @@ class BaseAgent:
             return self._cached_tools
 
         async with MCPClient() as mcp_client:
-            all_mcp_tools: list[ChatCompletionToolParam] = await mcp_client.get_openai_tools()
+            all_mcp_tools: list[
+                ChatCompletionToolParam
+            ] = await mcp_client.get_openai_tools()
 
         allowed = set(self.settings.agent_config.my_mcp_tools or [])
         if allowed:
-            filtered = [t for t in all_mcp_tools if getattr(t, "function", None) and t.function.name in allowed]
+            filtered = [
+                t
+                for t in all_mcp_tools
+                if getattr(t, "function", None) and t.function.name in allowed
+            ]
         else:
             filtered = all_mcp_tools
 
         self._cached_tools = filtered
         return self._cached_tools
 
-    async def prepare_response(self, message: str, response_format: Type[BaseChatResponse]=BaseChatResponse) -> str:
+    async def prepare_response(
+        self, message: str, response_format: type[BaseChatResponse] = BaseChatResponse
+    ) -> str:
         self.memory.add_user(message)
         logger.info("Initial call to model via LiteLLM")
         await self._call_llm(tool_choice="auto", response_format=response_format)
@@ -98,25 +106,38 @@ class BaseAgent:
             logger.info("Final call to model after tool calls")
             await self._call_llm(tool_choice="none", response_format=response_format)
 
-        output = response_format.model_validate_json(self.memory.messages[-1].get("content"))
+        output = response_format.model_validate_json(
+            self.memory.messages[-1].get("content")
+        )
         return output.text_response
 
-    async def _call_llm(self, *, tool_choice: Any, response_format: Type[BaseChatResponse]) -> None:
+    async def _call_llm(
+        self, *, tool_choice: Any, response_format: type[BaseChatResponse]
+    ) -> None:
         tools = await self.tools
         system_prompt = await self.get_system_prompt()
         try:
             response = self._client.chat(
-                self.memory.build_messages(system_prompt), tools=tools, tool_choice=tool_choice, response_format=response_format
+                self.memory.build_messages(system_prompt),
+                tools=tools,
+                tool_choice=tool_choice,
+                response_format=response_format,
             )
         except BadRequestError:
             logger.exception("LLM call failed; shrinking memory and retrying")
             self.memory.shrink_messages_to_fit_token_limit(True)
             response = self._client.chat(
-                self.memory.build_messages(system_prompt), tools=tools, tool_choice=tool_choice, response_format=response_format
+                self.memory.build_messages(system_prompt),
+                tools=tools,
+                tool_choice=tool_choice,
+                response_format=response_format,
             )
 
         msg = response.choices[0].message
-        assistant_dict: dict[str, Any] = {"role": "assistant", "content": getattr(msg, "content", None)}
+        assistant_dict: dict[str, Any] = {
+            "role": "assistant",
+            "content": getattr(msg, "content", None),
+        }
         tool_calls = getattr(msg, "tool_calls", None)
         if tool_calls:
             assistant_dict["tool_calls"] = []
@@ -134,7 +155,9 @@ class BaseAgent:
                 )
         self.memory.add_assistant(assistant_dict)
 
-    async def _add_tool_results_to_memory(self, assistant_message: dict[str, Any]) -> None:
+    async def _add_tool_results_to_memory(
+        self, assistant_message: dict[str, Any]
+    ) -> None:
         tool_calls = assistant_message.get("tool_calls") or []
         tool_call_list = []
         tool_call_id_list = []
@@ -144,12 +167,18 @@ class BaseAgent:
                 name = fn.get("name")
                 arguments = fn.get("arguments") or "{}"
                 try:
-                    args_dict = json.loads(arguments) if isinstance(arguments, str) else arguments
+                    args_dict = (
+                        json.loads(arguments)
+                        if isinstance(arguments, str)
+                        else arguments
+                    )
                 except json.JSONDecodeError:
                     args_dict = {}
                 logger.info(f"Calling tool: {name} with args: {args_dict}")
                 tool_call_list.append(mcp_client.call(name, args=args_dict))
                 tool_call_id_list.append(tool_call.get("id"))
 
-            for result, tool_call_id in zip(await asyncio.gather(*tool_call_list), tool_call_id_list):
+            for result, tool_call_id in zip(
+                await asyncio.gather(*tool_call_list), tool_call_id_list
+            ):
                 self.memory.add_tool_result(tool_call_id or "", result=str(result))

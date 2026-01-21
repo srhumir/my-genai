@@ -47,12 +47,12 @@ def _build_agent_settings(settings: Settings, config_path: Path) -> Settings:
     if not isinstance(raw, dict):
         raise ValueError(f"agent_config.yaml must contain a mapping at {config_path}")
 
-
     merged = settings.agent_config.model_dump()
     merged.update(raw)
     agent_config = AgentConfig(**merged)
 
     return settings.model_copy(deep=True, update={"agent_config": agent_config})
+
 
 if __name__ == "__main__":
     settings = Settings()
@@ -63,7 +63,6 @@ if __name__ == "__main__":
     )
     agents = load_agents(settings, session_config)
     for agent in agents:
-        print(f"Loaded agent from: {agent.settings.agent_config.name}, *** {agent.settings.agent_config.description}")
-
-
-
+        print(
+            f"Loaded agent from: {agent.settings.agent_config.name}, *** {agent.settings.agent_config.description}"
+        )

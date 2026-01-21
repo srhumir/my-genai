@@ -1,10 +1,11 @@
+import os
+from pathlib import Path
+
 from chainlit.utils import mount_chainlit
-from docutils.nodes import description
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-import os
-from pathlib import Path
+
 from src.agents_library import ChatSessionConfig, load_agents
 from src.config.settings import settings
 
@@ -20,6 +21,7 @@ def register_service(name: str, path: str, target: str, description: str) -> Non
         name (str): Display name of the service.
         path (str): URL path where the service is mounted.
         target (str): Python file containing the Chainlit app.
+        description (str): Description of the service to show to user.
     """
     mount_chainlit(app=app, target=target, path=path)
     services.append({"name": name, "path": path, "description": description})
@@ -41,10 +43,10 @@ def root() -> RedirectResponse:
 
 
 session_config = ChatSessionConfig(
-        bot_user_name="TestBot",
-        session_id="session_123",
-        topic_id="topic_abc",
-    )
+    bot_user_name="TestBot",
+    session_id="session_123",
+    topic_id="topic_abc",
+)
 
 agents = load_agents(settings, session_config)
 
@@ -56,11 +58,14 @@ for agent in agents:
     agent_path = agent.agent_folder_path
     target_file = Path(f"./chainlit_pages/{clean_name}.py")
     # breakpoint()
-    with open(base_path, "r", encoding="utf-8") as f:
+    with open(base_path, encoding="utf-8") as f:
         content = f.read().replace("$AGENT", os.path.split(agent_path)[-1])
     with open(target_file, "w", encoding="utf-8") as f:
         f.write(content)
 
     register_service(
-        name=agent_name, path=f"/{clean_name}", target=f"./chainlit_pages/{clean_name}.py", description=agent.settings.agent_config.description
+        name=agent_name,
+        path=f"/{clean_name}",
+        target=f"./chainlit_pages/{clean_name}.py",
+        description=agent.settings.agent_config.description,
     )

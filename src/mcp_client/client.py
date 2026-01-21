@@ -1,11 +1,11 @@
 from logging import getLogger
 from typing import Any
 
+from litellm import ChatCompletionToolParam, ChatCompletionToolParamFunctionChunk
 from mcp import Tool
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import ResourceLink, TextContent
-from litellm import ChatCompletionToolParam, ChatCompletionToolParamFunctionChunk
 
 from src.config.settings import MCPClientConfig, settings
 

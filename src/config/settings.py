@@ -6,8 +6,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
 
+
 class ChatBotConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True, extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env", env_ignore_empty=True, extra="ignore"
+    )
     pass
 
 
@@ -44,7 +47,6 @@ class AgentConfig(ChatBotConfig):
         if self.model.startswith("google"):
             return os.getenv("GOOGLE_API_KEY")
         return None
-
 
 
 class Settings(ChatBotConfig):

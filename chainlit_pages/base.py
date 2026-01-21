@@ -16,7 +16,10 @@ async def on_chat_start() -> None:
     )
     memory = ConversationMemory()
     agent = BaseAgent(
-        settings=settings, session_config=session, memory=memory, agent_folder_path=AGENT_FOLDER_PATH
+        settings=settings,
+        session_config=session,
+        memory=memory,
+        agent_folder_path=AGENT_FOLDER_PATH,
     )
     cl.user_session.set("agent", agent)
 

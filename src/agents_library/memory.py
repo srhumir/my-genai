@@ -20,11 +20,13 @@ class ConversationMemory:
         self.messages.append(message)
 
     def add_tool_result(self, tool_call_id: str, result: str) -> None:
-        self.messages.append({
-            "role": "tool",
-            "content": result,
-            "tool_call_id": tool_call_id,
-        })
+        self.messages.append(
+            {
+                "role": "tool",
+                "content": result,
+                "tool_call_id": tool_call_id,
+            }
+        )
 
     def build_messages(self, system_prompt: str) -> list[dict[str, Any]]:
         msgs: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
@@ -47,9 +49,13 @@ class ConversationMemory:
             self._remove_tool_calls_from_messages_until_tokens_below_limit(force_shrink)
             logger.info(f"Number of tokens after shrinking: {len(self.messages)}")
 
-    def _remove_tool_calls_from_messages_until_tokens_below_limit(self, force_shrink: bool) -> None:
+    def _remove_tool_calls_from_messages_until_tokens_below_limit(
+        self, force_shrink: bool
+    ) -> None:
         """Remove tool call messages from the start of the message list until the token count is below the hard limit."""
-        logger.info("Token limit exceeded, removing tool call messages to fit within limit.")
+        logger.info(
+            "Token limit exceeded, removing tool call messages to fit within limit."
+        )
         while (self._count_tokens() > self.hard_limit_tokens) or force_shrink:
             for i, msg in enumerate(self.messages[:-1]):
                 if msg.get("role") == "tool":
