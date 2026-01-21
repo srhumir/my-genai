@@ -5,12 +5,8 @@ from typing import Any
 import litellm
 from pydantic import BaseModel
 
+from src.agents_library.response_types import BaseChatResponse
 from src.config.settings import Settings, settings
-
-
-class ChatMessage(BaseModel):
-    role: str
-    my_answer: str
 
 
 class ChatClient:
@@ -26,7 +22,7 @@ class ChatClient:
         *,
         tools: list[Any] | None = None,
         tool_choice: Any | None = "auto",
-        response_format: type[BaseModel] = ChatMessage,
+        response_format: type[BaseModel] = BaseChatResponse,
     ) -> litellm.ModelResponse:
         """Call the underlying model and return the raw LiteLLM response.
 
@@ -39,6 +35,10 @@ class ChatClient:
         Returns:
             The LiteLLM ModelResponse object (OpenAI-style).
         """
+        if not isinstance(response_format, type(BaseChatResponse)):
+            raise ValueError(
+                "response_format is supposed to be inherited from BaseChatResponse"
+            )
         cfg = self._config
         resp = litellm.completion(
             model=cfg.model,

@@ -6,9 +6,9 @@ from pathlib import Path
 from typing import Any, cast
 
 from litellm import BadRequestError, ChatCompletionToolParam
-from pydantic import BaseModel
 
 from src.agents_library.memory import ConversationMemory
+from src.agents_library.response_types import BaseChatResponse
 from src.api_client.chat_client import ChatClient
 from src.config.settings import Settings
 from src.mcp_client.client import MCPClient
@@ -21,10 +21,6 @@ class ChatSessionConfig:
     bot_user_name: str
     session_id: str
     topic_id: str
-
-
-class BaseChatResponse(BaseModel):
-    text_response: str
 
 
 class BaseAgent:
