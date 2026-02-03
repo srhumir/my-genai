@@ -1,0 +1,16 @@
+name: First Agent
+version: 0.0.1
+description: First agent. Use for general purpose tasks.
+endpoint: ""
+model: "gpt-5"
+max_tokens: 1000
+temperature: 1
+stream: False
+timeout: 60
+my_mcp_tools: null
+open_mcp_tools: null
+
+replace_variables:
+  bot_user_name: "Reza"
+
+
