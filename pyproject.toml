@@ -114,6 +114,7 @@ pytest-asyncio = "^1.1.0"
 types-aiofiles = "^25.1.0.20251011"
 freezegun = "^1.5.5"
 types-python-dateutil = "^2.9.0.20251115"
+types-pyyaml = "^6.0.12.20250915"
 
 [build-system]
 requires = ["poetry-core"]

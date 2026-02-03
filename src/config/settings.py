@@ -1,5 +1,6 @@
 import os
 from dataclasses import field
+from typing import Literal
 
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -33,7 +34,7 @@ class AgentConfig(ChatBotConfig):
     stream: bool = False
     timeout: int = 60
     my_mcp_tools: list[str] | None = None
-    internal_model_tools: list[str] | None = None
+    search_context_size: Literal["low", "medium", "high"] | None = None
     open_mcp_tools: list[str] | None = None
 
     @property

@@ -21,17 +21,17 @@ async def on_chat_start() -> None:
         memory=memory,
         agent_folder_path=AGENT_FOLDER_PATH,
     )
-    cl.user_session.set("agent", agent)
+    cl.user_session.set("agent", agent)  # type: ignore[no-untyped-call]
 
-    await cl.Message("Hello! How can I assist you today?").send()
+    await cl.Message("Hello! How can I assist you today?").send()  # type: ignore[no-untyped-call]
 
 
 @cl.on_message
 async def on_message(message: cl.Message) -> None:
-    agent = cl.user_session.get("agent")
+    agent = cl.user_session.get("agent")  # type: ignore[no-untyped-call]
     if agent is None:
-        await cl.Message("Session not initialized. Please refresh the chat.").send()
+        await cl.Message("Session not initialized. Please refresh the chat.").send()  # type: ignore[no-untyped-call]
         return
 
     reply = await agent.prepare_response(message.content or "")
-    await cl.Message(content=reply).send()
+    await cl.Message(content=reply).send()  # type: ignore[no-untyped-call]

@@ -5,8 +5,12 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, cast
 
-from litellm import BadRequestError, ChatCompletionToolParam
+from litellm import (  # type: ignore[attr-defined]
+    BadRequestError,
+    ChatCompletionToolParam,
+)
 
+from src.agents_library import build_agent_settings
 from src.agents_library.memory import ConversationMemory
 from src.agents_library.response_types import BaseChatResponse
 from src.api_client.chat_client import ChatClient
@@ -42,22 +46,25 @@ class BaseAgent:
             memory: ConversationMemory used to store user/assistant messages and tool results.
             agent_folder_path: relative path to the folder containing agent config and prompt.
         """
-        self.settings = settings
+        self.agent_folder_path = Path(agent_folder_path)
+        self.agent_settings = build_agent_settings(
+            settings, self.agent_folder_path / "agent_config.yaml"
+        )
         self.session_config = session_config
         self.memory = memory
-        self.agent_folder_path = agent_folder_path
-        self._cached_tools: list[ChatCompletionToolParam] | None = None
-        self._client = ChatClient(settings)
+        self._cached_application_tools: list[ChatCompletionToolParam] | None = None
+        self._client = ChatClient(self.agent_settings)
 
     async def get_system_prompt(self) -> str:
         """Generate the system prompt for the agent by loading system_prompt.md and applying replacements."""
-        folder = Path(self.agent_folder_path)
-        prompt_path = folder / "system_prompt.md"
+        prompt_path = self.agent_folder_path / "system_prompt.md"
         if not prompt_path.exists():
             raise FileNotFoundError(f"system_prompt.md not found at: {prompt_path}")
         content = prompt_path.read_text(encoding="utf-8")
 
-        replace_vars = getattr(self.settings.agent_config, "replace_variables", None)
+        replace_vars = getattr(
+            self.agent_settings.agent_config, "replace_variables", None
+        )
         if replace_vars:
             for key, value in replace_vars.items():
                 content = content.replace(f"{{{key}}}", str(value))
@@ -67,8 +74,8 @@ class BaseAgent:
     @property
     async def tools(self) -> list[ChatCompletionToolParam]:
         """Fetch and cache MCP tools filtered by settings.agent_config.my_mcp_tools."""
-        if self.settings.agent_config.my_mcp_tools is None:
-            self._cached_tools = []
+        if self.agent_settings.agent_config.my_mcp_tools is None:
+            self._cached_tools: list[ChatCompletionToolParam] = []
         if self._cached_tools is not None:
             return self._cached_tools
 
@@ -77,7 +84,7 @@ class BaseAgent:
                 ChatCompletionToolParam
             ] = await mcp_client.get_openai_tools()
 
-        allowed = set(self.settings.agent_config.my_mcp_tools or [])
+        allowed = set(self.agent_settings.agent_config.my_mcp_tools or [])
         if allowed:
             filtered = [
                 t
@@ -96,14 +103,14 @@ class BaseAgent:
         self.memory.add_user(message)
         logger.info("Initial call to model via LiteLLM")
         await self._call_llm(tool_choice="auto", response_format=response_format)
-        assistant_message = cast(dict[str, Any], self.memory.messages[-1])
+        assistant_message = self.memory.messages[-1]
         if assistant_message.get("tool_calls"):
             await self._add_tool_results_to_memory(assistant_message)
             logger.info("Final call to model after tool calls")
             await self._call_llm(tool_choice="none", response_format=response_format)
 
         output = response_format.model_validate_json(
-            self.memory.messages[-1].get("content")
+            cast(str, self.memory.messages[-1].get("content"))
         )
         return output.text_response
 
@@ -161,6 +168,7 @@ class BaseAgent:
             for tool_call in tool_calls:
                 fn = tool_call.get("function") or {}
                 name = fn.get("name")
+                assert name
                 arguments = fn.get("arguments") or "{}"
                 try:
                     args_dict = (

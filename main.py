@@ -6,7 +6,8 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.agents_library import ChatSessionConfig, load_agents
+from src.agents_library.base import ChatSessionConfig
+from src.agents_library.initiator import load_agents
 from src.config.settings import settings
 
 app = FastAPI()
@@ -53,11 +54,11 @@ agents = load_agents(settings, session_config)
 base_path = Path("./chainlit_pages/base.py")
 
 for agent in agents:
-    agent_name = agent.settings.agent_config.name
+    agent_name = agent.agent_settings.agent_config.name
     clean_name = agent_name.lower().replace(" ", "_")
     agent_path = agent.agent_folder_path
     target_file = Path(f"./chainlit_pages/{clean_name}.py")
-    # breakpoint()
+
     with open(base_path, encoding="utf-8") as f:
         content = f.read().replace("$AGENT", os.path.split(agent_path)[-1])
     with open(target_file, "w", encoding="utf-8") as f:
@@ -67,5 +68,5 @@ for agent in agents:
         name=agent_name,
         path=f"/{clean_name}",
         target=f"./chainlit_pages/{clean_name}.py",
-        description=agent.settings.agent_config.description,
+        description=agent.agent_settings.agent_config.description,
     )

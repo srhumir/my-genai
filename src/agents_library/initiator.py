@@ -1,10 +1,9 @@
 from pathlib import Path
 
-import yaml
-
+from src.agents_library import build_agent_settings
 from src.agents_library.base import BaseAgent, ChatSessionConfig
 from src.agents_library.memory import ConversationMemory
-from src.config.settings import AgentConfig, Settings
+from src.config.settings import Settings
 
 
 def load_agents(
@@ -28,7 +27,7 @@ def load_agents(
                 f"Missing agent_config.yaml or system_prompt.md in {entry}"
             )
 
-        agent_settings = _build_agent_settings(settings, config_path)
+        agent_settings = build_agent_settings(settings, config_path)
         memory = ConversationMemory()
         agents.append(
             BaseAgent(
@@ -42,18 +41,6 @@ def load_agents(
     return agents
 
 
-def _build_agent_settings(settings: Settings, config_path: Path) -> Settings:
-    raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    if not isinstance(raw, dict):
-        raise ValueError(f"agent_config.yaml must contain a mapping at {config_path}")
-
-    merged = settings.agent_config.model_dump()
-    merged.update(raw)
-    agent_config = AgentConfig(**merged)
-
-    return settings.model_copy(deep=True, update={"agent_config": agent_config})
-
-
 if __name__ == "__main__":
     settings = Settings()
     session_config = ChatSessionConfig(
@@ -64,5 +51,5 @@ if __name__ == "__main__":
     agents = load_agents(settings, session_config)
     for agent in agents:
         print(
-            f"Loaded agent from: {agent.settings.agent_config.name}, *** {agent.settings.agent_config.description}"
+            f"Loaded agent from: {agent.agent_settings.agent_config.name}, *** {agent.agent_settings.agent_config.description}"
         )

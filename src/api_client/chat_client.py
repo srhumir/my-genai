@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import litellm
+from litellm.types.llms.openai import OpenAIWebSearchOptions
 from pydantic import BaseModel
 
 from src.agents_library.response_types import BaseChatResponse
@@ -40,20 +41,39 @@ class ChatClient:
                 "response_format is supposed to be inherited from BaseChatResponse"
             )
         cfg = self._config
-        resp = litellm.completion(
-            model=cfg.model,
-            messages=messages,
-            api_key=cfg.api_key,
-            max_tokens=cfg.max_tokens,
-            temperature=cfg.temperature,
-            stop=cfg.stop,
-            stream=cfg.stream,
-            timeout=cfg.timeout,
-            tools=tools,
-            tool_choice=tool_choice if tools else None,
-            api_base=cfg.endpoint or None,
-            response_format=response_format,
-        )
+        if "search" in cfg.model.lower():
+            resp = litellm.completion(
+                model=cfg.model,
+                messages=messages,
+                api_key=cfg.api_key,
+                max_tokens=cfg.max_tokens,
+                stop=cfg.stop,
+                stream=cfg.stream,
+                timeout=cfg.timeout,
+                api_base=cfg.endpoint or None,
+                response_format=response_format,
+                web_search_options=OpenAIWebSearchOptions(
+                    search_context_size=cfg.search_context_size
+                )
+                if cfg.search_context_size
+                else None,
+            )
+        else:
+            resp = litellm.completion(
+                model=cfg.model,
+                messages=messages,
+                api_key=cfg.api_key,
+                max_tokens=cfg.max_tokens,
+                temperature=cfg.temperature,
+                stop=cfg.stop,
+                stream=cfg.stream,
+                timeout=cfg.timeout,
+                tools=tools,
+                tool_choice=tool_choice if tools else None,
+                api_base=cfg.endpoint or None,
+                response_format=response_format,
+            )
+
         return resp
 
 
