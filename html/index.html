@@ -40,8 +40,8 @@
             const li = document.createElement('li');
 
             const a = document.createElement('a');
-            a.href = svc.path;
-            a.textContent = svc.name || svc.path;
+            a.href = `/chat?agent=${encodeURIComponent(svc.name)}`;
+            a.textContent = svc.display_name || svc.name;
             li.appendChild(a);
 
             // Add description after the anchor (inline), if available

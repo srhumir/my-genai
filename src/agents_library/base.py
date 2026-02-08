@@ -33,7 +33,7 @@ class BaseAgent:
         settings: Settings,
         session_config: ChatSessionConfig,
         memory: ConversationMemory,
-        agent_folder_path: str,
+        agent_folder_path: str | Path,
     ) -> None:
         """Initialize a BaseAgent that orchestrates LLM chat interactions with optional MCP tooling.
 
@@ -52,7 +52,7 @@ class BaseAgent:
         )
         self.session_config = session_config
         self.memory = memory
-        self._cached_application_tools: list[ChatCompletionToolParam] | None = None
+        self._cached_tools: list[ChatCompletionToolParam] | None = None
         self._client = ChatClient(self.agent_settings)
 
     async def get_system_prompt(self) -> str:
@@ -86,15 +86,12 @@ class BaseAgent:
 
         allowed = set(self.agent_settings.agent_config.my_mcp_tools or [])
         if allowed:
-            filtered = [
-                t
-                for t in all_mcp_tools
-                if getattr(t, "function", None) and t.function.name in allowed
-            ]
+            filtered = [t for t in all_mcp_tools if t["function"]["name"] in allowed]
         else:
             filtered = all_mcp_tools
 
         self._cached_tools = filtered
+        # breakpoint()
         return self._cached_tools
 
     async def prepare_response(
@@ -185,4 +182,5 @@ class BaseAgent:
             for result, tool_call_id in zip(
                 await asyncio.gather(*tool_call_list), tool_call_id_list
             ):
+                # logger.info(f"Tool call result: {result}")
                 self.memory.add_tool_result(tool_call_id or "", result=str(result))

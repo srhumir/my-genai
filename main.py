@@ -1,4 +1,5 @@
 import os
+from logging import getLogger
 from pathlib import Path
 
 from chainlit.utils import mount_chainlit
@@ -10,25 +11,17 @@ from src.agents_library.base import ChatSessionConfig
 from src.agents_library.initiator import load_agents
 from src.config.settings import settings
 
+logger = getLogger(__name__)
 app = FastAPI()
-
 services: list[dict[str, str]] = []
 
-
-def register_service(name: str, path: str, target: str, description: str) -> None:
-    """Mounts a Chainlit service to the FastAPI app and registers its metadata.
-
-    Args:
-        name (str): Display name of the service.
-        path (str): URL path where the service is mounted.
-        target (str): Python file containing the Chainlit app.
-        description (str): Description of the service to show to user.
-    """
-    mount_chainlit(app=app, target=target, path=path)
-    services.append({"name": name, "path": path, "description": description})
-
-
+mount_chainlit(app=app, target="./chainlit_frontend.py", path="/chat")
 app.mount("/welcome", StaticFiles(directory="html", html=True), name="html")
+
+
+def register_service(name: str, path: str, description: str) -> None:
+    logger.info(f"Adding Chainlit service '{name}' at path '{path}'")
+    services.append({"display_name": name, "name": path, "description": description})
 
 
 @app.get("/api/services")
@@ -51,22 +44,11 @@ session_config = ChatSessionConfig(
 
 agents = load_agents(settings, session_config)
 
-base_path = Path("./chainlit_pages/base.py")
+base_path = Path("chainlit_frontend.py")
 
 for agent in agents:
-    agent_name = agent.agent_settings.agent_config.name
-    clean_name = agent_name.lower().replace(" ", "_")
-    agent_path = agent.agent_folder_path
-    target_file = Path(f"./chainlit_pages/{clean_name}.py")
-
-    with open(base_path, encoding="utf-8") as f:
-        content = f.read().replace("$AGENT", os.path.split(agent_path)[-1])
-    with open(target_file, "w", encoding="utf-8") as f:
-        f.write(content)
-
     register_service(
-        name=agent_name,
-        path=f"/{clean_name}",
-        target=f"./chainlit_pages/{clean_name}.py",
+        name=agent.agent_settings.agent_config.name,
+        path=f"{os.path.split(agent.agent_folder_path)[1]}",
         description=agent.agent_settings.agent_config.description,
     )
