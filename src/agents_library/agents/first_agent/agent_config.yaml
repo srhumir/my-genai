@@ -7,10 +7,9 @@ max_tokens: 1000
 temperature: 1
 stream: False
 timeout: 60
-my_mcp_tools: null
+my_mcp_tools:
+  - search_engine
 open_mcp_tools: null
 
 replace_variables:
   bot_user_name: "Reza"
-
-
