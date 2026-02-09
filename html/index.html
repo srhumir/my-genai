@@ -24,7 +24,7 @@
     <script>
       async function loadServices() {
         try {
-          const res = await fetch('/api/services');
+          const res = await fetch('/chat_services/services');
           const data = await res.json();
           const list = document.getElementById('services');
           const empty = document.getElementById('empty');

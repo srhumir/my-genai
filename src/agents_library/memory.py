@@ -1,8 +1,15 @@
+import threading
 import time
+import uuid
 from logging import getLogger
 from typing import Any
 
 logger = getLogger(__name__)
+
+# Global memory store: {agent_key: {correlation_id: (ConversationMemory, last_used_timestamp)}}
+memory_store = {}
+memory_lock = threading.Lock()
+MEMORY_RETENTION_SECONDS = 3600  # 1 hour
 
 
 class ConversationMemory:
@@ -71,3 +78,31 @@ class ConversationMemory:
             if isinstance(content, str) and content:
                 total_tokens += len(content.split())
         return total_tokens
+
+
+def get_or_create_memory(
+    agent_key: str, correlation_id: str | None
+) -> tuple[ConversationMemory, str]:
+    now = time.time()
+    with memory_lock:
+        if agent_key not in memory_store:
+            memory_store[agent_key] = {}
+        if correlation_id and correlation_id in memory_store[agent_key]:
+            memory, _ = memory_store[agent_key][correlation_id]
+            memory_store[agent_key][correlation_id] = (memory, now)
+            return memory, correlation_id
+        # New session
+        new_id = correlation_id or str(uuid.uuid4())
+        memory = ConversationMemory()
+        memory_store[agent_key][new_id] = (memory, now)
+        return memory, new_id
+
+
+def cleanup_expired_memory():
+    now = time.time()
+    with memory_lock:
+        for agent_key in list(memory_store.keys()):
+            for cid in list(memory_store[agent_key].keys()):
+                _, last_used = memory_store[agent_key][cid]
+                if now - last_used > MEMORY_RETENTION_SECONDS:
+                    del memory_store[agent_key][cid]

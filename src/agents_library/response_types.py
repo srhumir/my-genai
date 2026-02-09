@@ -1,6 +1,16 @@
 from pydantic import BaseModel
 
 
+class AgentRequest(BaseModel):
+    query: str
+    correlation_id: str | None = None
+
+
+class AgentResponse(BaseModel):
+    response: str
+    correlation_id: str
+
+
 class BaseChatResponse(BaseModel):
     """The base type to pass to ChatClient.chat as response_format.
 
