@@ -40,14 +40,30 @@ Below is a quick walkthrough of the main pieces and data flow.
 - MCP server
   - File: `mcp_server/server.py`
   - Exposes each agent as an MCP tool (name + description from `agent_config.yaml`).
-  - Other agents (or external MCP clients) can call these tools to collaborate or compose results.
+  - Other agents (or external MCP clients) can call these tools to collaborate or compose results. These tools 
+    do not have integrated memory.
 
-# TODOs
-* add tool description to the system prompt
-* support replace_variables to run some code. For instance calling some tool, or getting current date etc.
-* Support providing a list of suggested initial action prompts.
-* have a more specific agent
-* Persist memory
-  * Define different levels of memory. session, topic, agent. For user or between users
-* ~~Have a mcp server~~
-* ~~Make websearch available~~
+# TODOs (ordered)
+1. Tool descriptions in system prompt
+   - Enumerate allowed tools per agent with short guidance so the model picks the right tool.
+2. Persist memory (session-level)
+   - Add TTL + delete endpoint (already exists) and optional disk/DB later. Define memory layers (session/topic/agent) and lifecycle.
+3. Suggested initial action prompts per agent
+   - Configurable hints to guide first steps for users and the model.
+4. Replace_variables (safe subset)
+   - Support deterministic ops (dates, static config, lightweight lookups). Avoid arbitrary code for security.
+5. Provide more specific example agents
+   - E.g., Web Researcher, Code Assistant, Data Summarizer with clear boundaries and prompts.
+6. Performance tweaks
+   - Cache system_prompt per agent, lazy-load tools, avoid repeated file reads.
+
+## Clarifications to add
+- Document AgentConfig
+  - Centralize LiteLLM settings, tools, response_format, and defaults. Validate required keys.
+- Error handling expectations
+  - Define failure modes and fallbacks: LLM BadRequest/timeouts, MCP call errors, missing prompts.
+- Security and operations
+  - Rate limiting and optional auth for public deployments. Avoid leaking sensitive config in logs.
+- Type safety
+  - Tighten types around LiteLLM params (e.g., ChatCompletionToolParam), message shapes, and response_format. Consider Protocols for tool schemas.
+
