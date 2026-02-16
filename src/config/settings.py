@@ -3,7 +3,6 @@ from dataclasses import field
 from typing import Literal
 
 from dotenv import load_dotenv
-from pydantic_core import MISSING
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
@@ -21,8 +20,7 @@ class MCPClientConfig(ChatBotConfig):
 
 
 class AgentConfig(ChatBotConfig):
-    """
-    AgentConfig defines the runtime settings for an agent and maps directly to agent_config.yaml.
+    """AgentConfig defines the runtime settings for an agent and maps directly to agent_config.yaml.
 
     Required
     - name: Human-friendly agent name.
@@ -55,17 +53,17 @@ class AgentConfig(ChatBotConfig):
     - api_key: Resolved from environment by model prefix:
       OPEN_API_KEY / AZURE_API_KEY / ANTHROPIC_API_KEY / GOOGLE_API_KEY.
 
-    Notes
+    Notes:
     - Place a system_prompt.md next to agent_config.yaml. Variables from replace_variables can be referenced.
     - For proxies (Azure/OpenAI), set endpoint, and ensure the correct env keys are present.
     - If the model supports tools, define my_mcp_tools to constrain tool usage.
     """
 
-    name: str = MISSING
-    description: str = MISSING
+    name: str = "dummy_agent"
+    description: str = "dummy description"
     replace_variables: dict[str, str] = field(default_factory=dict)
     endpoint: str = ""
-    model: str = MISSING
+    model: str = "dummy_model"
     max_tokens: int = 1000
     temperature: float = 0.3
     top_p: float = 0.95

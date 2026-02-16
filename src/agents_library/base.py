@@ -5,6 +5,7 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, cast
 
+from async_lru import alru_cache
 from litellm import (  # type: ignore[attr-defined]
     BadRequestError,
     ChatCompletionToolParam,
@@ -56,7 +57,15 @@ class BaseAgent:
         self._client = ChatClient(self.agent_settings)
 
     async def get_system_prompt(self) -> str:
-        """Generate the system prompt for the agent by loading system_prompt.md and applying replacements."""
+        """Generate the system prompt for the agent by loading system_prompt.md and applying replacements.
+
+        Then ensure the '## AVAILABLE TOOLS:' section contains the current tool descriptions. If the section
+        does not exist and tools are available, append it to the end of the prompt.
+        """
+        tool_description_list = [
+            f"* {tool["function"]["name"]}: {tool["function"]["description"].split("\n")[0]}"
+            for tool in await self.get_tools()
+        ]
         prompt_path = self.agent_folder_path / "system_prompt.md"
         if not prompt_path.exists():
             raise FileNotFoundError(f"system_prompt.md not found at: {prompt_path}")
@@ -69,15 +78,40 @@ class BaseAgent:
             for key, value in replace_vars.items():
                 content = content.replace(f"{{{key}}}", str(value))
 
+        if tool_description_list:
+            section_header = "## AVAILABLE TOOLS:"
+            header_idx = content.find(section_header)
+            if header_idx != -1:
+                # Find end of section by next header or EOF
+                after_header_idx = header_idx + len(section_header)
+                next_header_idx = content.find("\n## ", after_header_idx)
+                if next_header_idx == -1:
+                    next_header_idx = len(content)
+                existing_section = content[after_header_idx:next_header_idx]
+                if not existing_section.endswith("\n"):
+                    existing_section = existing_section + "\n"
+                updated_section = (
+                    existing_section + "\n".join(tool_description_list) + "\n"
+                )
+                content = (
+                    content[:after_header_idx]
+                    + updated_section
+                    + content[next_header_idx:]
+                )
+            else:
+                if not content.endswith("\n"):
+                    content += "\n"
+                content += (
+                    f"\n{section_header}\n" + "\n".join(tool_description_list) + "\n"
+                )
+
         return content
 
-    @property
-    async def tools(self) -> list[ChatCompletionToolParam]:
+    @alru_cache
+    async def get_tools(self) -> list[ChatCompletionToolParam]:
         """Fetch and cache MCP tools filtered by settings.agent_config.my_mcp_tools."""
         if self.agent_settings.agent_config.my_mcp_tools is None:
-            self._cached_tools: list[ChatCompletionToolParam] = []
-        if self._cached_tools is not None:
-            return self._cached_tools
+            return []
 
         async with MCPClient() as mcp_client:
             all_mcp_tools: list[
@@ -85,14 +119,7 @@ class BaseAgent:
             ] = await mcp_client.get_openai_tools()
 
         allowed = set(self.agent_settings.agent_config.my_mcp_tools or [])
-        if allowed:
-            filtered = [t for t in all_mcp_tools if t["function"]["name"] in allowed]
-        else:
-            filtered = all_mcp_tools
-
-        self._cached_tools = filtered
-        # breakpoint()
-        return self._cached_tools
+        return [t for t in all_mcp_tools if t["function"]["name"] in allowed]
 
     async def prepare_response(
         self, message: str, response_format: type[BaseChatResponse] = BaseChatResponse
@@ -114,7 +141,7 @@ class BaseAgent:
     async def _call_llm(
         self, *, tool_choice: Any, response_format: type[BaseChatResponse]
     ) -> None:
-        tools = await self.tools
+        tools = await self.get_tools()
         system_prompt = await self.get_system_prompt()
         try:
             response = self._client.chat(
