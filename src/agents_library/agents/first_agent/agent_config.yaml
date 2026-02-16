@@ -12,4 +12,5 @@ my_mcp_tools:
 open_mcp_tools: null
 
 replace_variables:
-  bot_user_name: "Reza"
+  hello: "Hi"
+  bot_user_name: "..."

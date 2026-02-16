@@ -123,3 +123,86 @@ Demo role.
 
     assert content.strip().endswith("* calc: Compute things")
     assert "## AVAILABLE TOOLS:" in content
+
+
+@pytest.mark.asyncio
+async def test_replace_variables_literal_values(tmp_path: Path):
+    agent_dir = tmp_path / "agents" / "literal_agent"
+    agent_dir.mkdir(parents=True)
+
+    (agent_dir / "agent_config.yaml").write_text(
+        """
+name: Literal Agent
+description: Demo literal
+model: openai/gpt-4o
+replace_variables:
+  hello: "Hi"
+  bot_user_name: "Bob"
+""",
+        encoding="utf-8",
+    )
+
+    (agent_dir / "system_prompt.md").write_text(
+        """
+## ROLE & CONTEXT:
+{hello} {bot_user_name}
+""",
+        encoding="utf-8",
+    )
+
+    agent = BaseAgent(
+        settings=settings,
+        session_config=ChatSessionConfig(bot_user_name="Ignored", session_id="s", topic_id="t"),
+        memory=ConversationMemory(),
+        agent_folder_path=agent_dir,
+    )
+
+    content = await agent.get_system_prompt()
+    assert "Hi Bob" in content
+
+
+@pytest.mark.asyncio
+async def test_replace_variables_dynamic_via_replacement_method(tmp_path: Path):
+    agent_dir = tmp_path / "agents" / "dynamic_agent"
+    agent_dir.mkdir(parents=True)
+
+    (agent_dir / "agent_config.yaml").write_text(
+        """
+name: Dynamic Agent
+description: Demo dynamic
+model: openai/gpt-4o
+replace_variables:
+  bot_user_name: "..."
+""",
+        encoding="utf-8",
+    )
+
+    (agent_dir / "system_prompt.md").write_text(
+        """
+## USER & SYSTEM CONTEXT:
+User: {bot_user_name}
+""",
+        encoding="utf-8",
+    )
+
+    # Provide replacement_method.py with variables_to_replace_in_prompt
+    (agent_dir / "replacement_method.py").write_text(
+        """
+from src.agents_library.base import BaseAgent
+
+def variables_to_replace_in_prompt(self: BaseAgent) -> dict[str, str]:
+    return {"bot_user_name": self.session_config.bot_user_name}
+""",
+        encoding="utf-8",
+    )
+
+    agent = BaseAgent(
+        settings=settings,
+        session_config=ChatSessionConfig(bot_user_name="Alice", session_id="s", topic_id="t"),
+        memory=ConversationMemory(),
+        agent_folder_path=agent_dir,
+    )
+
+    content = await agent.get_system_prompt()
+    assert "User: Alice" in content
+

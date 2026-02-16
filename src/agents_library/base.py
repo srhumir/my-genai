@@ -1,4 +1,5 @@
 import asyncio
+import importlib.util
 import json
 from dataclasses import dataclass
 from logging import getLogger
@@ -70,13 +71,7 @@ class BaseAgent:
         if not prompt_path.exists():
             raise FileNotFoundError(f"system_prompt.md not found at: {prompt_path}")
         content = prompt_path.read_text(encoding="utf-8")
-
-        replace_vars = getattr(
-            self.agent_settings.agent_config, "replace_variables", None
-        )
-        if replace_vars:
-            for key, value in replace_vars.items():
-                content = content.replace(f"{{{key}}}", str(value))
+        content = self._replace_variables_in_prompt(content)
 
         if tool_description_list:
             section_header = "## AVAILABLE TOOLS:"
@@ -104,6 +99,42 @@ class BaseAgent:
                 content += (
                     f"\n{section_header}\n" + "\n".join(tool_description_list) + "\n"
                 )
+
+        return content
+
+    def _replace_variables_in_prompt(self, content: str) -> str:
+        """Replace variables in the prompt based on agent_config.replace_variables.
+
+        Loads variables_to_replace_in_prompt from <agent_folder_path>/replacement_method.py if available.
+        If a replace_variables value is "...", substitute from variables_to_replace_in_prompt.
+        Otherwise, use the literal value from agent_config.
+        """
+        # Try dynamic import: <agent_folder_path>/replacement_method.py
+        dynamic_variables: dict[str, Any] = {}
+        try:
+            module_name = f"agent_replacement_method_{hash(self.agent_folder_path)}"
+            spec = importlib.util.spec_from_file_location(  # use explicit util
+                module_name, str(self.agent_folder_path / "replacement_method.py")
+            )
+            if spec and spec.loader:
+                module = importlib.util.module_from_spec(spec)  # use explicit util
+                spec.loader.exec_module(module)  # type: ignore[attr-defined]
+                variables_to_replace_in_prompt_func = getattr(module, "variables_to_replace_in_prompt", None)
+                if callable(variables_to_replace_in_prompt_func):
+                    dynamic_variables = variables_to_replace_in_prompt_func(self) or {}
+        except (FileNotFoundError, ImportError):
+            pass
+
+        replace_vars = getattr(self.agent_settings.agent_config, "replace_variables", None) or {}
+        for key, value in replace_vars.items():
+            try:
+                final_val = dynamic_variables[key] if str(value).strip() == "..." else value
+            except KeyError:
+                raise ValueError(
+                    f"replace_variables has '...' for key '{key}' "
+                    "but no dynamic value was provided by replacement_method.py"
+                )
+            content = content.replace(f"{{{key}}}", str(final_val))
 
         return content
 
