@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -35,13 +36,41 @@ async def on_chat_start() -> None:
     )
     cl.user_session.set("agent", agent)  # type: ignore[no-untyped-call]
 
-    await cl.Message(
-        f"Hello! I am here to {agent.agent_settings.agent_config.description} How can I assist you today?"
-    ).send()  # type: ignore[no-untyped-call]
+    _, initial_prompts = await asyncio.gather(
+        cl.Message(
+            f"Hello! I am here to {agent.agent_settings.agent_config.description} How can I assist you today?"
+        ).send(),  # type: ignore[no-untyped-call]
+        agent.get_initial_action_prompts(),
+    )
+    if initial_prompts:
+        res = await cl.AskActionMessage(
+            content="Would you like to do one of the followings?",
+            actions=[
+                *[
+                    cl.Action(
+                        name=title, payload={"value": prompt}, label=f"✅ {title}"
+                    )
+                    for title, prompt in initial_prompts.items()
+                ],
+                cl.Action(
+                    name="no",
+                    payload={"value": "no"},
+                    label="❌ No let me ask my own questions",
+                ),
+            ],
+            timeout=90,
+        ).send()
+        if res and res.get("payload", {}).get("value") != "no":
+            await asyncio.gather(
+                cl.Message(
+                    content="Okay let's go, please be patient, it might take a while..."
+                ).send(),  # type: ignore[no-untyped-call]
+                main(cl.Message(content=res["payload"]["value"])),  # type: ignore[no-untyped-call]
+            )
 
 
 @cl.on_message
-async def on_message(message: cl.Message) -> None:
+async def main(message: cl.Message) -> None:
     agent = cl.user_session.get("agent")  # type: ignore[no-untyped-call]
     if agent is None:
         await cl.Message("Session not initialized. Please refresh the chat.").send()  # type: ignore[no-untyped-call]

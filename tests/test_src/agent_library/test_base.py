@@ -152,7 +152,9 @@ replace_variables:
 
     agent = BaseAgent(
         settings=settings,
-        session_config=ChatSessionConfig(bot_user_name="Ignored", session_id="s", topic_id="t"),
+        session_config=ChatSessionConfig(
+            bot_user_name="Ignored", session_id="s", topic_id="t"
+        ),
         memory=ConversationMemory(),
         agent_folder_path=agent_dir,
     )
@@ -198,7 +200,9 @@ def variables_to_replace_in_prompt(self: BaseAgent) -> dict[str, str]:
 
     agent = BaseAgent(
         settings=settings,
-        session_config=ChatSessionConfig(bot_user_name="Alice", session_id="s", topic_id="t"),
+        session_config=ChatSessionConfig(
+            bot_user_name="Alice", session_id="s", topic_id="t"
+        ),
         memory=ConversationMemory(),
         agent_folder_path=agent_dir,
     )
@@ -206,3 +210,82 @@ def variables_to_replace_in_prompt(self: BaseAgent) -> dict[str, str]:
     content = await agent.get_system_prompt()
     assert "User: Alice" in content
 
+
+@pytest.mark.asyncio
+async def test_get_initial_action_prompts_parses_sections(tmp_path: Path):
+    agent_dir = tmp_path / "agents" / "init_prompts_agent"
+    agent_dir.mkdir(parents=True)
+
+    (agent_dir / "agent_config.yaml").write_text(
+        """
+name: Init Prompts Agent
+description: Tests
+model: openai/gpt-4o
+replace_variables:
+  who: "Alice"
+""",
+        encoding="utf-8",
+    )
+
+    (agent_dir / "initial_action_prompts.md").write_text(
+        """
+# Greeting
+Hello {who}!
+
+# Task
+Please do X, Y, and Z.
+With details on each step.
+
+# Footer
+Thanks.
+""",
+        encoding="utf-8",
+    )
+
+    agent = BaseAgent(
+        settings=settings,
+        session_config=ChatSessionConfig(
+            bot_user_name="Bob", session_id="s", topic_id="t"
+        ),
+        memory=ConversationMemory(),
+        agent_folder_path=agent_dir,
+    )
+
+    sections = await agent.get_initial_action_prompts()
+    assert "Greeting" in sections
+    assert "Task" in sections
+    assert "Footer" in sections
+
+    assert sections["Greeting"] == "Hello Alice!"
+    assert sections["Task"].startswith("Please do X, Y, and Z.")
+    assert "details on each step." in sections["Task"]
+    assert sections["Footer"] == "Thanks."
+
+
+@pytest.mark.asyncio
+async def test_get_initial_action_prompts_missing_file_returns_empty_dict(
+    tmp_path: Path,
+):
+    agent_dir = tmp_path / "agents" / "no_init_prompts_agent"
+    agent_dir.mkdir(parents=True)
+
+    (agent_dir / "agent_config.yaml").write_text(
+        """
+name: No Init Prompts Agent
+description: Tests
+model: openai/gpt-4o
+""",
+        encoding="utf-8",
+    )
+
+    agent = BaseAgent(
+        settings=settings,
+        session_config=ChatSessionConfig(
+            bot_user_name="Bob", session_id="s", topic_id="t"
+        ),
+        memory=ConversationMemory(),
+        agent_folder_path=agent_dir,
+    )
+
+    sections = await agent.get_initial_action_prompts()
+    assert sections == {}

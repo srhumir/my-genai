@@ -6,6 +6,7 @@ my-genai lets you define AI agents using simple YAML configs and automatically s
 - A Chainlit chat UI for human conversations.
 - FastAPI endpoints so you can call each agent over HTTP.
 - MCP tools so agents can call each other programmatically.
+- Optional initial action prompts to quickly start common tasks in the UI.
 
 You add agents by dropping a folder with `agent_config.yaml` and a `system_prompt.md` under `src/agents_library/agents/`. 
 The app discovers them at startup and wires them into the UI, the API, and the MCP server.
@@ -20,6 +21,16 @@ Below is a quick walkthrough of the main pieces.
     - `system_prompt.md`: the agent’s system instructions (with variable placeholders like `{bot_user_name}`).
     - Optional `replacement_method.py`: provides a function `variables_to_replace_in_prompt(self)` to dynamically supply 
       values when `replace_variables` uses `...`.
+    - Optional `initial_action_prompts.md`: Markdown file that defines quick-start actions for the UI.
+
+- Initial action prompts
+  - Class: `BaseAgent` (`src/agents_library/base.py`), method: `get_initial_action_prompts()`.
+  - Reads `initial_action_prompts.md` from the agent folder, applies `_replace_variables_in_prompt`, and parses sections by headers:
+    - Each line starting with `#` becomes a section key (header text without `#`).
+    - All lines until the next `#` (or end of file) become the section value.
+  - Returned as a dict: `{section_name: section_text}`.
+  - The Chainlit frontend (`chainlit_frontend.py`) shows these as selectable actions at chat start. If the user
+    chooses one of them. The agent receives the section text as a user message to kick off the conversation.
 
 - Prompt building and tools section
   - Class: `BaseAgent` (`src/agents_library/base.py`).
@@ -50,6 +61,7 @@ Below is a quick walkthrough of the main pieces.
   - File: `chainlit_frontend.py`.
   - On chat start, reads `?agent=<agent_name>`, instantiates `BaseAgent` from `AGENT_FOLDER_PATH`, and stores it in `cl.user_session.set()`.
   - On messages, forwards text to the stored agent and streams back replies.
+  - If `initial_action_prompts.md` exists, shows them as quick-start actions.
 
 - MCP server and inter-agent tools
   - File: `mcp_server/server.py`.
@@ -62,13 +74,13 @@ Below is a quick walkthrough of the main pieces.
     - Updating an existing `## AVAILABLE TOOLS:` section.
     - Adding the tools section when missing.
     - Variable replacement for literals and dynamic values via `replacement_method.py`.
-
+    - Parsing `initial_action_prompts.md` into sections and handling missing files.
 # TODOs (ordered)
 ~~1. Tool descriptions in system prompt~~
    - Enumerate allowed tools per agent with short guidance so the model picks the right tool.
 2. Persist memory (session-level)
    - Add TTL + delete endpoint (already exists) and optional disk/DB later. Define memory layers (session/topic/agent) and lifecycle.
-3. Suggested initial action prompts per agent
+~~3. Suggested initial action prompts per agent~~
    - Configurable hints to guide first steps for users and the model.
 ~~4. Replace_variables (safe subset)~~
    - Support deterministic ops (dates, static config, lightweight lookups). Avoid arbitrary code for security.

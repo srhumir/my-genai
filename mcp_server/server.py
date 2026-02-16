@@ -1,3 +1,5 @@
+from logging import getLogger
+
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 
@@ -9,6 +11,7 @@ from src.agents_library.response_types import BaseChatResponse
 from src.config.settings import settings
 
 load_dotenv()
+logger = getLogger(__name__)
 
 mcp_app = FastMCP(
     name="my-mcp-server",
@@ -25,7 +28,10 @@ session_config = ChatSessionConfig(
 agent_path_list = load_agent_paths()
 
 for agent_path in agent_path_list:
-    agent_config = build_agent_settings(settings, agent_path / "agent_config.yaml")
+    logger.info(f"Loading agent from path: {agent_path}")
+    agent_config = build_agent_settings(
+        settings, agent_path / "agent_config.yaml"
+    ).agent_config
     tool_name = agent_config.name.lower().replace(" ", "_")
     tool_desc = agent_config.description
 

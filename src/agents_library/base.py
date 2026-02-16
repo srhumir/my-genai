@@ -102,42 +102,6 @@ class BaseAgent:
 
         return content
 
-    def _replace_variables_in_prompt(self, content: str) -> str:
-        """Replace variables in the prompt based on agent_config.replace_variables.
-
-        Loads variables_to_replace_in_prompt from <agent_folder_path>/replacement_method.py if available.
-        If a replace_variables value is "...", substitute from variables_to_replace_in_prompt.
-        Otherwise, use the literal value from agent_config.
-        """
-        # Try dynamic import: <agent_folder_path>/replacement_method.py
-        dynamic_variables: dict[str, Any] = {}
-        try:
-            module_name = f"agent_replacement_method_{hash(self.agent_folder_path)}"
-            spec = importlib.util.spec_from_file_location(  # use explicit util
-                module_name, str(self.agent_folder_path / "replacement_method.py")
-            )
-            if spec and spec.loader:
-                module = importlib.util.module_from_spec(spec)  # use explicit util
-                spec.loader.exec_module(module)  # type: ignore[attr-defined]
-                variables_to_replace_in_prompt_func = getattr(module, "variables_to_replace_in_prompt", None)
-                if callable(variables_to_replace_in_prompt_func):
-                    dynamic_variables = variables_to_replace_in_prompt_func(self) or {}
-        except (FileNotFoundError, ImportError):
-            pass
-
-        replace_vars = getattr(self.agent_settings.agent_config, "replace_variables", None) or {}
-        for key, value in replace_vars.items():
-            try:
-                final_val = dynamic_variables[key] if str(value).strip() == "..." else value
-            except KeyError:
-                raise ValueError(
-                    f"replace_variables has '...' for key '{key}' "
-                    "but no dynamic value was provided by replacement_method.py"
-                )
-            content = content.replace(f"{{{key}}}", str(final_val))
-
-        return content
-
     @alru_cache
     async def get_tools(self) -> list[ChatCompletionToolParam]:
         """Fetch and cache MCP tools filtered by settings.agent_config.my_mcp_tools."""
@@ -151,6 +115,37 @@ class BaseAgent:
 
         allowed = set(self.agent_settings.agent_config.my_mcp_tools or [])
         return [t for t in all_mcp_tools if t["function"]["name"] in allowed]
+
+    @alru_cache
+    async def get_initial_action_prompts(self) -> dict[str, str]:
+        prompt_path = self.agent_folder_path / "initial_action_prompts.md"
+        if not prompt_path.exists():
+            logger.info(f"initial_action_prompts.md not found at: {prompt_path}")
+            return {}
+
+        content = prompt_path.read_text(encoding="utf-8")
+        content = self._replace_variables_in_prompt(content)
+
+        sections: dict[str, str] = {}
+        current_key: str | None = None
+        current_lines: list[str] = []
+
+        for line in content.splitlines():
+            if line.lstrip().startswith("#"):
+                if current_key is not None:
+                    sections[current_key] = "\n".join(current_lines).strip()
+
+                header = line.lstrip().lstrip("#").strip()
+                current_key = header
+                current_lines = []
+            else:
+                if current_key is not None:
+                    current_lines.append(line)
+
+        if current_key is not None:
+            sections[current_key] = "\n".join(current_lines).strip()
+
+        return sections
 
     async def prepare_response(
         self, message: str, response_format: type[BaseChatResponse] = BaseChatResponse
@@ -242,3 +237,45 @@ class BaseAgent:
             ):
                 # logger.info(f"Tool call result: {result}")
                 self.memory.add_tool_result(tool_call_id or "", result=str(result))
+
+    def _replace_variables_in_prompt(self, content: str) -> str:
+        """Replace variables in the prompt based on agent_config.replace_variables.
+
+        Loads variables_to_replace_in_prompt from <agent_folder_path>/replacement_method.py if available.
+        If a replace_variables value is "...", substitute from variables_to_replace_in_prompt.
+        Otherwise, use the literal value from agent_config.
+        """
+        # Try dynamic import: <agent_folder_path>/replacement_method.py
+        dynamic_variables: dict[str, Any] = {}
+        try:
+            module_name = f"agent_replacement_method_{hash(self.agent_folder_path)}"
+            spec = importlib.util.spec_from_file_location(  # use explicit util
+                module_name, str(self.agent_folder_path / "replacement_method.py")
+            )
+            if spec and spec.loader:
+                module = importlib.util.module_from_spec(spec)  # use explicit util
+                spec.loader.exec_module(module)  # type: ignore[attr-defined]
+                variables_to_replace_in_prompt_func = getattr(
+                    module, "variables_to_replace_in_prompt", None
+                )
+                if callable(variables_to_replace_in_prompt_func):
+                    dynamic_variables = variables_to_replace_in_prompt_func(self) or {}
+        except (FileNotFoundError, ImportError):
+            pass
+
+        replace_vars = (
+            getattr(self.agent_settings.agent_config, "replace_variables", None) or {}
+        )
+        for key, value in replace_vars.items():
+            try:
+                final_val = (
+                    dynamic_variables[key] if str(value).strip() == "..." else value
+                )
+            except KeyError:
+                raise ValueError(
+                    f"replace_variables has '...' for key '{key}' "
+                    "but no dynamic value was provided by replacement_method.py"
+                )
+            content = content.replace(f"{{{key}}}", str(final_val))
+
+        return content
