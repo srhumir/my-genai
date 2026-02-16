@@ -11,51 +11,66 @@ You add agents by dropping a folder with `agent_config.yaml` and a `system_promp
 The app discovers them at startup and wires them into the UI, the API, and the MCP server.
 
 # How it works (technical)
-Below is a quick walkthrough of the main pieces and data flow.
+Below is a quick walkthrough of the main pieces.
 
 - Agent definition
   - Location: `src/agents_library/agents/<agent_name>/`
   - Files:
-    - `agent_config.yaml`: model name, temperature, allowed tools, description, etc.
-    - `system_prompt.md`: the agent’s system instructions (with optional variable replacements).
+    - `agent_config.yaml`: model name, temperature, allowed tools, description, etc. Supports `replace_variables`.
+    - `system_prompt.md`: the agent’s system instructions (with variable placeholders like `{bot_user_name}`).
+    - Optional `replacement_method.py`: provides a function `variables_to_replace_in_prompt(self)` to dynamically supply 
+      values when `replace_variables` uses `...`.
 
-- Backend app
-  - Entry: `main.py`
-  - Discovers agent folders via `load_agent_paths()` and registers two interfaces:
-    - Chainlit frontend at `/chat` (see `chainlit_frontend.py`). You can pass `?agent=<agent_name>` to chat with a specific agent.
-    - HTTP API under `/api/agents/<agent_name>` for programmatic calls. Each POST takes `{ query, correlation_id? }` 
-      and returns `{ response, correlation_id }`.
-  - Per-session memory: each call uses a `correlation_id` to isolate memory in RAM. If not provided, 
-    the server generates one and returns it. You can delete memory via 
-    `DELETE /api/agents/memory/{agent_key}/{correlation_id}`. There’s also automatic retention cleanup.
+- Prompt building and tools section
+  - Class: `BaseAgent` (`src/agents_library/base.py`).
+  - Variable replacement:
+    - Literal values come from `agent_config.yaml` under `replace_variables`.
+    - If a value is `...`, `BaseAgent` tries to load `replacement_method.py` and call `variables_to_replace_in_prompt(self)` to get the value at runtime.
+  - Tools section auto-update:
+    - `get_system_prompt()` ensures a `## AVAILABLE TOOLS:` section contains short, first-line descriptions for the agent’s allowed tools.
+    - If the section exists, new tool bullets are appended to it; if it’s missing and tools exist, the section is added at the end.
+
+- Chat client and LiteLLM
+  - Class: `ChatClient` (`src/api_client/chat_client.py`).
+  - Wraps LiteLLM’s chat API and respects the agent’s config (model, tools, tool_choice, response_format).
+  - Accepts messages and optional tools, returns the model response; errors like `BadRequestError` are handled by shrinking memory and retrying.
+
+- Memory model (per-call isolation)
+  - Each API call uses a `correlation_id` to keep memory isolated in RAM.
+  - First call can omit the id; the server returns one to use for subsequent calls to continue the same context.
+  - Memory can be deleted via an endpoint and is also cleaned up with a retention policy.
+
+- Routers split
+  - Directory: `routers/`
+  - `chainlit_router.py`: mounts the Chainlit UI under `/chat` and initializes/stores the chosen agent instance in the Chainlit `user_session`.
+  - `agents_router.py`: exposes `/api/agents/<agent_name>` endpoints and memory management routes.
+  - Function definitions and schemas are separated per router module.
 
 - Chainlit UI
-  - File: `chainlit_frontend.py`
-  - On chat start, it reads the `agent` query param, instantiates that agent, and stores the instance in the Chainlit user session.
-  - On messages, it forwards text to the agent and streams back the reply.
+  - File: `chainlit_frontend.py`.
+  - On chat start, reads `?agent=<agent_name>`, instantiates `BaseAgent` from `AGENT_FOLDER_PATH`, and stores it in `cl.user_session.set()`.
+  - On messages, forwards text to the stored agent and streams back replies.
 
-- Agent runtime
-  - Class: `BaseAgent` (`src/agents_library/base.py`)
-  - Responsibilities:
-    - Build the system prompt and conversation messages from memory.
-    - Call the LLM via `ChatClient` using LiteLLM (supports tools and structured responses).
-    - If the LLM requests tools, it runs them via `MCPClient`, adds tool results to memory, and calls the LLM again 
-      to finalize the answer.
+- MCP server and inter-agent tools
+  - File: `mcp_server/server.py`.
+  - Registers each agent as an MCP tool so agents can call each other via MCP.
+  - Each tool’s `prepare_response(query)` returns a string; these tools are stateless and don’t share memory.
 
-- MCP server
-  - File: `mcp_server/server.py`
-  - Exposes each agent as an MCP tool (name + description from `agent_config.yaml`).
-  - Other agents (or external MCP clients) can call these tools to collaborate or compose results. These tools 
-    do not have integrated memory.
+- Tests
+  - File: `tests/test_src/agent_library/test_base.py`.
+  - Covers:
+    - Updating an existing `## AVAILABLE TOOLS:` section.
+    - Adding the tools section when missing.
+    - Variable replacement for literals and dynamic values via `replacement_method.py`.
 
 # TODOs (ordered)
-1. Tool descriptions in system prompt
+~~1. Tool descriptions in system prompt~~
    - Enumerate allowed tools per agent with short guidance so the model picks the right tool.
 2. Persist memory (session-level)
    - Add TTL + delete endpoint (already exists) and optional disk/DB later. Define memory layers (session/topic/agent) and lifecycle.
 3. Suggested initial action prompts per agent
    - Configurable hints to guide first steps for users and the model.
-4. Replace_variables (safe subset)
+~~4. Replace_variables (safe subset)~~
    - Support deterministic ops (dates, static config, lightweight lookups). Avoid arbitrary code for security.
 5. Provide more specific example agents
    - E.g., Web Researcher, Code Assistant, Data Summarizer with clear boundaries and prompts.
@@ -71,4 +86,3 @@ Below is a quick walkthrough of the main pieces and data flow.
   - Rate limiting and optional auth for public deployments. Avoid leaking sensitive config in logs.
 - Type safety
   - Tighten types around LiteLLM params (e.g., ChatCompletionToolParam), message shapes, and response_format. Consider Protocols for tool schemas.
-
