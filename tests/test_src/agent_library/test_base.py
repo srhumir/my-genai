@@ -10,8 +10,8 @@ from src.config.settings import settings
 
 
 @pytest.mark.asyncio
-async def test_get_system_prompt_updates_existing_tools_section(tmp_path: Path):
-    agent_dir = tmp_path / "agents" / "demo_agent"
+async def test_get_system_prompt_updates_existing_tools_section(tmp_path: Path) -> None:
+    agent_dir: Path = tmp_path / "agents" / "demo_agent"
     agent_dir.mkdir(parents=True)
 
     (agent_dir / "agent_config.yaml").write_text(
@@ -49,7 +49,7 @@ Existing line
         agent_folder_path=agent_dir,
     )
 
-    async def mock_get_tools(self: Any):
+    async def mock_get_tools(self: Any) -> list[dict[str, Any]]:
         return [
             {
                 "type": "function",
@@ -75,8 +75,8 @@ Existing line
 
 
 @pytest.mark.asyncio
-async def test_get_system_prompt_adds_tools_section_when_missing(tmp_path: Path):
-    agent_dir = tmp_path / "agents" / "demo_agent2"
+async def test_get_system_prompt_adds_tools_section_when_missing(tmp_path: Path) -> None:
+    agent_dir: Path = tmp_path / "agents" / "demo_agent2"
     agent_dir.mkdir(parents=True)
 
     # agent config
@@ -106,7 +106,7 @@ Demo role.
         agent_folder_path=agent_dir,
     )
 
-    async def mock_get_tools2(self: Any):
+    async def mock_get_tools2(self: Any) -> list[dict[str, Any]]:
         return [
             {
                 "type": "function",
@@ -126,8 +126,8 @@ Demo role.
 
 
 @pytest.mark.asyncio
-async def test_replace_variables_literal_values(tmp_path: Path):
-    agent_dir = tmp_path / "agents" / "literal_agent"
+async def test_replace_variables_literal_values(tmp_path: Path) -> None:
+    agent_dir: Path = tmp_path / "agents" / "literal_agent"
     agent_dir.mkdir(parents=True)
 
     (agent_dir / "agent_config.yaml").write_text(
@@ -164,8 +164,8 @@ replace_variables:
 
 
 @pytest.mark.asyncio
-async def test_replace_variables_dynamic_via_replacement_method(tmp_path: Path):
-    agent_dir = tmp_path / "agents" / "dynamic_agent"
+async def test_replace_variables_dynamic_via_replacement_method(tmp_path: Path) -> None:
+    agent_dir: Path = tmp_path / "agents" / "dynamic_agent"
     agent_dir.mkdir(parents=True)
 
     (agent_dir / "agent_config.yaml").write_text(
@@ -212,8 +212,8 @@ def variables_to_replace_in_prompt(self: BaseAgent) -> dict[str, str]:
 
 
 @pytest.mark.asyncio
-async def test_get_initial_action_prompts_parses_sections(tmp_path: Path):
-    agent_dir = tmp_path / "agents" / "init_prompts_agent"
+async def test_get_initial_action_prompts_parses_sections(tmp_path: Path) -> None:
+    agent_dir: Path = tmp_path / "agents" / "init_prompts_agent"
     agent_dir.mkdir(parents=True)
 
     (agent_dir / "agent_config.yaml").write_text(
@@ -265,8 +265,8 @@ Thanks.
 @pytest.mark.asyncio
 async def test_get_initial_action_prompts_missing_file_returns_empty_dict(
     tmp_path: Path,
-):
-    agent_dir = tmp_path / "agents" / "no_init_prompts_agent"
+) -> None:
+    agent_dir: Path = tmp_path / "agents" / "no_init_prompts_agent"
     agent_dir.mkdir(parents=True)
 
     (agent_dir / "agent_config.yaml").write_text(

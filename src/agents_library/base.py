@@ -104,7 +104,7 @@ class BaseAgent:
 
     @alru_cache
     async def get_tools(self) -> list[ChatCompletionToolParam]:
-        """Fetch and cache MCP tools filtered by settings.agent_config.my_mcp_tools."""
+        """Fetch MCP tools filtered by settings.agent_config.my_mcp_tools."""
         if self.agent_settings.agent_config.my_mcp_tools is None:
             return []
 
@@ -118,6 +118,14 @@ class BaseAgent:
 
     @alru_cache
     async def get_initial_action_prompts(self) -> dict[str, str]:
+        """Parse initial_action_prompts.md into sections keyed by header.
+
+        Reads the agent's initial_action_prompts.md, applies variable replacements,
+        and returns a dict mapping each Markdown header line (starting with '#') to
+        the section content until the next header or end of file. If the file does
+        not exist, returns an empty dict.
+        This dic is later used to present initial action options to the user in the frontend.
+        """
         prompt_path = self.agent_folder_path / "initial_action_prompts.md"
         if not prompt_path.exists():
             logger.info(f"initial_action_prompts.md not found at: {prompt_path}")
@@ -245,7 +253,6 @@ class BaseAgent:
         If a replace_variables value is "...", substitute from variables_to_replace_in_prompt.
         Otherwise, use the literal value from agent_config.
         """
-        # Try dynamic import: <agent_folder_path>/replacement_method.py
         dynamic_variables: dict[str, Any] = {}
         try:
             module_name = f"agent_replacement_method_{hash(self.agent_folder_path)}"
@@ -254,7 +261,7 @@ class BaseAgent:
             )
             if spec and spec.loader:
                 module = importlib.util.module_from_spec(spec)  # use explicit util
-                spec.loader.exec_module(module)  # type: ignore[attr-defined]
+                spec.loader.exec_module(module)
                 variables_to_replace_in_prompt_func = getattr(
                     module, "variables_to_replace_in_prompt", None
                 )

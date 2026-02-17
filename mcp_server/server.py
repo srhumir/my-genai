@@ -29,17 +29,17 @@ agent_path_list = load_agent_paths()
 
 for agent_path in agent_path_list:
     logger.info(f"Loading agent from path: {agent_path}")
-    agent_config = build_agent_settings(
+    agent_settings = build_agent_settings(
         settings, agent_path / "agent_config.yaml"
-    ).agent_config
-    tool_name = agent_config.name.lower().replace(" ", "_")
-    tool_desc = agent_config.description
+    )
+    tool_name = agent_settings.agent_config.name.lower().replace(" ", "_")
+    tool_desc = agent_settings.agent_config.description
 
     @mcp_app.tool(name=tool_name, description=tool_desc)
     async def tool_func(query: str) -> str:
         memory = ConversationMemory()
         agent = BaseAgent(
-            settings=agent_config,
+            settings=agent_settings,
             session_config=session_config,
             memory=memory,
             agent_folder_path=agent_path,

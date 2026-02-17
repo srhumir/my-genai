@@ -18,7 +18,7 @@ router = APIRouter()
 
 
 @router.delete("/memory/{agent_key}/{correlation_id}")
-def delete_memory(agent_key: str, correlation_id: str):
+def delete_memory(agent_key: str, correlation_id: str) -> dict[str, str]:
     with memory_lock:
         if agent_key in memory_store and correlation_id in memory_store[agent_key]:
             del memory_store[agent_key][correlation_id]
@@ -29,7 +29,7 @@ def delete_memory(agent_key: str, correlation_id: str):
 agent_paths = load_agent_paths()
 
 
-def get_agent_key(path_of_agent: Path):
+def get_agent_key(path_of_agent: Path) -> str:
     return os.path.split(path_of_agent)[1]
 
 
@@ -39,7 +39,7 @@ for agent_path in agent_paths:
     route = f"/{agent_key}"
 
     @router.post(route, response_model=AgentResponse)
-    async def agent_endpoint(request: AgentRequest, agent_path=agent_path):
+    async def agent_endpoint(request: AgentRequest) -> AgentResponse:
         cleanup_expired_memory()
         memory, cid = get_or_create_memory(agent_key, request.correlation_id)
         session_config = ChatSessionConfig(

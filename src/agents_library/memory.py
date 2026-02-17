@@ -7,9 +7,9 @@ from typing import Any
 logger = getLogger(__name__)
 
 # Global memory store: {agent_key: {correlation_id: (ConversationMemory, last_used_timestamp)}}
-memory_store = {}
+memory_store: dict[str, dict[str, tuple["ConversationMemory", float]]] = {}
 memory_lock = threading.Lock()
-MEMORY_RETENTION_SECONDS = 3600  # 1 hour
+MEMORY_RETENTION_SECONDS = 3600
 
 
 class ConversationMemory:
@@ -91,14 +91,14 @@ def get_or_create_memory(
             memory, _ = memory_store[agent_key][correlation_id]
             memory_store[agent_key][correlation_id] = (memory, now)
             return memory, correlation_id
-        # New session
+
         new_id = correlation_id or str(uuid.uuid4())
         memory = ConversationMemory()
         memory_store[agent_key][new_id] = (memory, now)
         return memory, new_id
 
 
-def cleanup_expired_memory():
+def cleanup_expired_memory() -> None:
     now = time.time()
     with memory_lock:
         for agent_key in list(memory_store.keys()):

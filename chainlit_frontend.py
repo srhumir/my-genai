@@ -65,7 +65,7 @@ async def on_chat_start() -> None:
                 cl.Message(
                     content="Okay let's go, please be patient, it might take a while..."
                 ).send(),  # type: ignore[no-untyped-call]
-                main(cl.Message(content=res["payload"]["value"])),  # type: ignore[no-untyped-call]
+                main(cl.Message(content=res["payload"]["value"])),
             )
 
 
