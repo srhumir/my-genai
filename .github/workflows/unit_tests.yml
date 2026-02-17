@@ -1,5 +1,7 @@
 name: Unit Tests
-
+permissions:
+  pull-requests: write
+  contents: read
 on:
   pull_request:
   push:
