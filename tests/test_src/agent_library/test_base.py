@@ -75,7 +75,9 @@ Existing line
 
 
 @pytest.mark.asyncio
-async def test_get_system_prompt_adds_tools_section_when_missing(tmp_path: Path) -> None:
+async def test_get_system_prompt_adds_tools_section_when_missing(
+    tmp_path: Path,
+) -> None:
     agent_dir: Path = tmp_path / "agents" / "demo_agent2"
     agent_dir.mkdir(parents=True)
 

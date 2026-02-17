@@ -29,9 +29,7 @@ agent_path_list = load_agent_paths()
 
 for agent_path in agent_path_list:
     logger.info(f"Loading agent from path: {agent_path}")
-    agent_settings = build_agent_settings(
-        settings, agent_path / "agent_config.yaml"
-    )
+    agent_settings = build_agent_settings(settings, agent_path / "agent_config.yaml")
     tool_name = agent_settings.agent_config.name.lower().replace(" ", "_")
     tool_desc = agent_settings.agent_config.description
 
