@@ -1,0 +1,13 @@
+name: Search Engine
+version: 0.0.1
+description: Search the web and summarize the findings.
+endpoint: ""
+model: "gpt-4o-search-preview"
+max_tokens: 1000
+stream: False
+timeout: 60
+search_context_size: "medium"
+my_mcp_tools: null
+open_mcp_tools: null
+
+
