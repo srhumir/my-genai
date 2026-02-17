@@ -1,5 +1,7 @@
 import os
+from collections.abc import Callable, Coroutine
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
@@ -33,15 +35,14 @@ def get_agent_key(path_of_agent: Path) -> str:
     return os.path.split(path_of_agent)[1]
 
 
-# Dynamically register agent endpoints on the agents_router
-for agent_path in agent_paths:
-    agent_key = get_agent_key(agent_path)
-    route = f"/{agent_key}"
+def _create_agent_endpoint(
+    _agent_path: Path,
+) -> Callable[[AgentRequest], Coroutine[Any, Any, AgentResponse]]:
+    _agent_key = get_agent_key(agent_path)
 
-    @router.post(route, response_model=AgentResponse)
     async def agent_endpoint(request: AgentRequest) -> AgentResponse:
         cleanup_expired_memory()
-        memory, cid = get_or_create_memory(agent_key, request.correlation_id)
+        memory, cid = get_or_create_memory(_agent_key, request.correlation_id)
         session_config = ChatSessionConfig(
             bot_user_name="TestBot",
             session_id="session_123",
@@ -51,7 +52,20 @@ for agent_path in agent_paths:
             settings=settings,
             session_config=session_config,
             memory=memory,
-            agent_folder_path=agent_path,
+            agent_folder_path=_agent_path,
         )
         response = await agent.prepare_response(request.query)
         return AgentResponse(response=response, correlation_id=cid)
+
+    return agent_endpoint
+
+
+for agent_path in agent_paths:
+    agent_key = get_agent_key(agent_path)
+    route = f"/{agent_key}"
+    router.add_api_route(
+        route,
+        _create_agent_endpoint(agent_path),
+        methods=["POST"],
+        response_model=AgentResponse,
+    )
