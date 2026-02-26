@@ -76,13 +76,14 @@ Below is a quick walkthrough of the main pieces.
     - Variable replacement for literals and dynamic values via `replacement_method.py`.
     - Parsing `initial_action_prompts.md` into sections and handling missing files.
 # TODOs (ordered)
-~~1. Tool descriptions in system prompt~~
+1. ~~Tool descriptions in system prompt~~
    - Enumerate allowed tools per agent with short guidance so the model picks the right tool.
+7. Migrate to LangGraph
 2. Persist memory (session-level)
    - Add TTL + delete endpoint (already exists) and optional disk/DB later. Define memory layers (session/topic/agent) and lifecycle.
-~~3. Suggested initial action prompts per agent~~
+3. ~~Suggested initial action prompts per agent~~
    - Configurable hints to guide first steps for users and the model.
-~~4. Replace_variables (safe subset)~~
+4. ~~Replace_variables (safe subset)~~
    - Support deterministic ops (dates, static config, lightweight lookups). Avoid arbitrary code for security.
 5. Provide more specific example agents
    - E.g., Web Researcher, Code Assistant, Data Summarizer with clear boundaries and prompts.
