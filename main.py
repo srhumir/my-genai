@@ -1,40 +1,27 @@
+from logging import getLogger
+
 from chainlit.utils import mount_chainlit
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from routers.agents_router import router as agents_router
+from routers.chainlit_router import router as chainlit_router
+
+logger = getLogger(__name__)
 app = FastAPI()
-
-services: list[dict[str, str]] = []
-
-
-def register_service(name: str, path: str, target: str) -> None:
-    """Mounts a Chainlit service to the FastAPI app and registers its metadata.
-
-    Args:
-        name (str): Display name of the service.
-        path (str): URL path where the service is mounted.
-        target (str): Python file containing the Chainlit app.
-    """
-    mount_chainlit(app=app, target=target, path=path)
-    services.append({"name": name, "path": path})
-
-
-app.mount("/welcome", StaticFiles(directory="html", html=True), name="html")
-
-
-@app.get("/api/services")
-def list_services() -> dict[str, list[dict[str, str]]]:
-    """List registered services as JSON for the guide page."""
-    return {"services": services}
 
 
 @app.get("/")
 def root() -> RedirectResponse:
     """Redirect root to the HTML guide."""
-    return RedirectResponse(url="/welcome/")
+    return RedirectResponse(url="/chat_services/welcome/")
 
 
-register_service(
-    name="Service Engineer", path="/service_engineer", target="chainlit_service_engineer.py"
+mount_chainlit(app=app, target="./chainlit_frontend.py", path="/chat")
+app.mount(
+    "/chat_services/welcome", StaticFiles(directory="html", html=True), name="html"
 )
+app.include_router(chainlit_router, prefix="/chat_services")
+
+app.include_router(agents_router, prefix="/api/agents")
