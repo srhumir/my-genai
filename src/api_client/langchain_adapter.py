@@ -8,7 +8,12 @@ from src.config.settings import AgentConfig
 
 
 def build_chat_model(config: AgentConfig) -> BaseChatModel:
-    """Build a LangChain chat model from AgentConfig without changing YAML contract."""
+    """Build a provider-specific LangChain chat model from AgentConfig.
+
+    This adapter preserves the existing ``agent_config.yaml`` contract while
+    translating runtime fields (model, temperature, timeout, max tokens,
+    endpoint, API key) into LangChain model constructors.
+    """
     model_name = config.model
     provider, _, model_id = model_name.partition("/")
     resolved_model = model_id or model_name

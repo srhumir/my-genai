@@ -9,15 +9,19 @@ from src.mcp_client.client import MCPClient
 
 
 class _MCPToolInputBase(BaseModel):
+    """Base schema that allows additional MCP tool fields at runtime."""
+
     model_config = ConfigDict(extra="allow")
 
 
 async def _invoke_mcp_tool(tool_name: str, **kwargs: Any) -> str:
+    """Invoke an MCP tool asynchronously and return its string result."""
     async with MCPClient() as client:
         return await client.call(tool_name, args=kwargs)
 
 
 def _build_schema(tool_name: str, schema: dict[str, Any]) -> type[BaseModel]:
+    """Create a permissive pydantic args schema from MCP/OpenAI JSON schema."""
     properties = schema.get("properties") or {}
     required = set(schema.get("required") or [])
     fields: dict[str, tuple[Any, Any]] = {}
@@ -32,6 +36,7 @@ def _build_schema(tool_name: str, schema: dict[str, Any]) -> type[BaseModel]:
 
 
 def openai_tool_to_langchain(tool_payload: dict[str, Any]) -> StructuredTool:
+    """Convert one OpenAI-style function tool definition to StructuredTool."""
     function_spec = tool_payload["function"]
     tool_name = function_spec["name"]
     description = function_spec.get("description", "")
@@ -50,4 +55,6 @@ def openai_tool_to_langchain(tool_payload: dict[str, Any]) -> StructuredTool:
 
 
 def openai_tools_to_langchain(tools: list[dict[str, Any]]) -> list[StructuredTool]:
+    """Convert a list of OpenAI-style tool payloads to LangChain tools."""
+
     return [openai_tool_to_langchain(tool) for tool in tools]

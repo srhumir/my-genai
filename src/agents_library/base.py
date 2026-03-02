@@ -18,18 +18,23 @@ logger = getLogger(__name__)
 
 @dataclass
 class ChatSessionConfig:
+    """Minimal metadata for one chat session."""
+
     bot_user_name: str
     session_id: str
     topic_id: str
 
 
 class BaseAgent:
+    """Agent wrapper that loads prompts, tools, and executes chat turns."""
     def __init__(
         self,
         settings: Settings,
         session_config: ChatSessionConfig,
         agent_folder_path: str | Path,
     ) -> None:
+        """Initialize agent runtime settings for a specific agent folder."""
+
         self.agent_folder_path = Path(agent_folder_path)
         self.agent_settings = build_agent_settings(
             settings, self.agent_folder_path / "agent_config.yaml"
@@ -38,6 +43,7 @@ class BaseAgent:
         self._client = ChatClient(self.agent_settings)
 
     async def get_system_prompt(self) -> str:
+        """Load and render system prompt, appending allowlisted tool descriptions."""
         tool_description_list = [
             f"* {tool['function']['name']}: {tool['function']['description'].split(chr(10))[0]}"
             for tool in await self.get_tools()
@@ -78,6 +84,7 @@ class BaseAgent:
 
     @alru_cache
     async def get_tools(self) -> list[dict[str, Any]]:
+        """Fetch MCP tools and filter by ``agent_config.my_mcp_tools`` allowlist."""
         if self.agent_settings.agent_config.my_mcp_tools is None:
             return []
 
@@ -90,6 +97,8 @@ class BaseAgent:
     async def prepare_response(
         self, message: str, response_format: type[BaseChatResponse] = BaseChatResponse
     ) -> str:
+        """Process one user message and return validated ``text_response`` output."""
+
         tools = openai_tools_to_langchain(await self.get_tools())
         system_prompt = await self.get_system_prompt()
         output = await self._client.chat(
@@ -104,6 +113,7 @@ class BaseAgent:
 
     @alru_cache
     async def get_initial_action_prompts(self) -> dict[str, str]:
+        """Parse ``initial_action_prompts.md`` into header-keyed prompt sections."""
         prompt_path = self.agent_folder_path / "initial_action_prompts.md"
         if not prompt_path.exists():
             logger.info(f"initial_action_prompts.md not found at: {prompt_path}")
@@ -134,6 +144,7 @@ class BaseAgent:
         return sections
 
     def _replace_variables_in_prompt(self, content: str) -> str:
+        """Apply configured and dynamic variable substitutions to prompt content."""
         dynamic_variables: dict[str, Any] = {}
         try:
             module_name = f"agent_replacement_method_{hash(self.agent_folder_path)}"

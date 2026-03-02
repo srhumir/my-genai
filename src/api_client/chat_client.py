@@ -13,7 +13,15 @@ from src.config.settings import Settings
 
 
 class ChatClient:
-    """Run chat interactions through a LangGraph tool loop."""
+    """Run chat interactions through a LangGraph tool loop.
+
+    The graph contains:
+      - an ``agent`` node that calls the configured chat model.
+      - an optional ``tools`` node that executes LangChain tools for tool calls.
+
+    Conversation history is persisted by thread ID using LangGraph's in-memory
+    checkpointer so callers can continue multi-turn conversations.
+    """
 
     _checkpointer = MemorySaver()
 
@@ -29,6 +37,18 @@ class ChatClient:
         tools: list[Any] | None = None,
         response_format: type[BaseModel] = BaseChatResponse,
     ) -> BaseModel:
+        """Generate a structured chat response using the LangGraph runtime.
+
+        Args:
+            system_prompt: System prompt text for the conversation.
+            user_message: Latest user message for this turn.
+            thread_id: Conversation ID used by LangGraph checkpointer memory.
+            tools: Optional LangChain-compatible tools to bind to the model.
+            response_format: Pydantic response schema inheriting BaseChatResponse.
+
+        Returns:
+            A validated pydantic model instance matching ``response_format``.
+        """
         if not issubclass(response_format, BaseChatResponse):
             raise ValueError(
                 "response_format is supposed to be inherited from BaseChatResponse"
