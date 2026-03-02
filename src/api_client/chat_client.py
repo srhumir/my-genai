@@ -2,88 +2,92 @@ from __future__ import annotations
 
 from typing import Any
 
-import litellm
-from litellm.types.llms.openai import OpenAIWebSearchOptions
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, MessagesState, StateGraph
+from langgraph.prebuilt import ToolNode, tools_condition
 from pydantic import BaseModel
 
 from src.agents_library.response_types import BaseChatResponse
-from src.config.settings import Settings, settings
+from src.api_client.langchain_adapter import build_chat_model
+from src.config.settings import Settings
 
 
 class ChatClient:
-    """Thin wrapper around LiteLLM to call chat completions using app settings."""
+    """Run chat interactions through a LangGraph tool loop.
+
+    The graph contains:
+      - an ``agent`` node that calls the configured chat model.
+      - an optional ``tools`` node that executes LangChain tools for tool calls.
+
+    Conversation history is persisted by thread ID using LangGraph's in-memory
+    checkpointer so callers can continue multi-turn conversations.
+    """
+
+    _checkpointer = MemorySaver()
 
     def __init__(self, settings: Settings) -> None:
-        self._settings = settings
         self._config = settings.agent_config
 
-    def chat(
+    async def chat(
         self,
-        messages: list[dict[str, Any]],
         *,
+        system_prompt: str,
+        user_message: str,
+        thread_id: str,
         tools: list[Any] | None = None,
-        tool_choice: Any | None = "auto",
         response_format: type[BaseModel] = BaseChatResponse,
-    ) -> litellm.ModelResponse:
-        """Call the underlying model and return the raw LiteLLM response.
+    ) -> BaseModel:
+        """Generate a structured chat response using the LangGraph runtime.
 
         Args:
-            messages: OpenAI-compatible chat message list.
-            tools: Optional OpenAI-compatible tools list.
-            tool_choice: Tool choice option (e.g., "auto", "none", or a specific tool spec).
-            response_format: Pydantic model to parse the response into.
+            system_prompt: System prompt text for the conversation.
+            user_message: Latest user message for this turn.
+            thread_id: Conversation ID used by LangGraph checkpointer memory.
+            tools: Optional LangChain-compatible tools to bind to the model.
+            response_format: Pydantic response schema inheriting BaseChatResponse.
 
         Returns:
-            The LiteLLM ModelResponse object (OpenAI-style).
+            A validated pydantic model instance matching ``response_format``.
         """
-        if not isinstance(response_format, type(BaseChatResponse)):
+        if not issubclass(response_format, BaseChatResponse):
             raise ValueError(
                 "response_format is supposed to be inherited from BaseChatResponse"
             )
-        cfg = self._config
-        if "search" in cfg.model.lower():
-            resp = litellm.completion(
-                model=cfg.model,
-                messages=messages,
-                api_key=cfg.api_key,
-                max_tokens=cfg.max_tokens,
-                stop=cfg.stop,
-                stream=cfg.stream,
-                timeout=cfg.timeout,
-                api_base=cfg.endpoint or None,
-                response_format=response_format,
-                web_search_options=OpenAIWebSearchOptions(
-                    search_context_size=cfg.search_context_size
-                )
-                if cfg.search_context_size
-                else None,
+
+        chat_model = build_chat_model(self._config)
+        tool_list = tools or []
+        model_with_tools = chat_model.bind_tools(tool_list) if tool_list else chat_model
+
+        graph_builder = StateGraph(MessagesState)
+
+        async def agent_node(state: MessagesState) -> dict[str, list[Any]]:
+            model_response = await model_with_tools.ainvoke(state["messages"])
+            return {"messages": [model_response]}
+
+        graph_builder.add_node("agent", agent_node)
+        if tool_list:
+            graph_builder.add_node("tools", ToolNode(tool_list))
+        graph_builder.set_entry_point("agent")
+        if tool_list:
+            graph_builder.add_conditional_edges(
+                "agent",
+                tools_condition,
+                {"tools": "tools", END: END},
             )
+            graph_builder.add_edge("tools", "agent")
         else:
-            resp = litellm.completion(
-                model=cfg.model,
-                messages=messages,
-                api_key=cfg.api_key,
-                max_tokens=cfg.max_tokens,
-                temperature=cfg.temperature,
-                stop=cfg.stop,
-                stream=cfg.stream,
-                timeout=cfg.timeout,
-                tools=tools,
-                tool_choice=tool_choice if tools else None,
-                api_base=cfg.endpoint or None,
-                response_format=response_format,
-            )
+            graph_builder.add_edge("agent", END)
 
-        return resp
+        app = graph_builder.compile(checkpointer=self._checkpointer)
+        graph_result = await app.ainvoke(
+            {
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ]
+            },
+            config={"configurable": {"thread_id": thread_id}},
+        )
 
-
-if __name__ == "__main__":
-    agent_config = settings.agent_config
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "List 5 important events in the XIX century"},
-    ]
-    client = ChatClient(settings)
-    resp = client.chat(messages)
-
-    print(resp)
+        final_model = chat_model.with_structured_output(response_format)
+        return await final_model.ainvoke(graph_result["messages"])

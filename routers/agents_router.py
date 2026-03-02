@@ -21,6 +21,7 @@ router = APIRouter()
 
 @router.delete("/memory/{agent_key}/{correlation_id}")
 def delete_memory(agent_key: str, correlation_id: str) -> dict[str, str]:
+    """Delete a stored correlation ID for the given agent."""
     with memory_lock:
         if agent_key in memory_store and correlation_id in memory_store[agent_key]:
             del memory_store[agent_key][correlation_id]
@@ -32,17 +33,21 @@ agent_paths = load_agent_paths()
 
 
 def get_agent_key(path_of_agent: Path) -> str:
+    """Return the folder name used as the public agent route key."""
     return os.path.split(path_of_agent)[1]
 
 
 def _create_agent_endpoint(
     _agent_path: Path,
 ) -> Callable[[AgentRequest], Coroutine[Any, Any, AgentResponse]]:
-    _agent_key = get_agent_key(agent_path)
+    """Create a FastAPI endpoint function bound to one agent path."""
+
+    _agent_key = get_agent_key(_agent_path)
 
     async def agent_endpoint(request: AgentRequest) -> AgentResponse:
+        """Handle an agent query and return text response plus correlation ID."""
         cleanup_expired_memory()
-        memory, cid = get_or_create_memory(_agent_key, request.correlation_id)
+        cid = get_or_create_memory(_agent_key, request.correlation_id)
         session_config = ChatSessionConfig(
             bot_user_name="TestBot",
             session_id="session_123",
@@ -51,7 +56,6 @@ def _create_agent_endpoint(
         agent = BaseAgent(
             settings=settings,
             session_config=session_config,
-            memory=memory,
             agent_folder_path=_agent_path,
         )
         response = await agent.prepare_response(request.query)
