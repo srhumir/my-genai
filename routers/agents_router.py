@@ -42,7 +42,7 @@ def _create_agent_endpoint(
 
     async def agent_endpoint(request: AgentRequest) -> AgentResponse:
         cleanup_expired_memory()
-        memory, cid = get_or_create_memory(_agent_key, request.correlation_id)
+        cid = get_or_create_memory(_agent_key, request.correlation_id)
         session_config = ChatSessionConfig(
             bot_user_name="TestBot",
             session_id="session_123",
@@ -51,7 +51,6 @@ def _create_agent_endpoint(
         agent = BaseAgent(
             settings=settings,
             session_config=session_config,
-            memory=memory,
             agent_folder_path=_agent_path,
         )
         response = await agent.prepare_response(request.query)

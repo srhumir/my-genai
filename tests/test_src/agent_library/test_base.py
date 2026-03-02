@@ -5,7 +5,6 @@ from unittest.mock import patch
 import pytest
 
 from src.agents_library.base import BaseAgent, ChatSessionConfig
-from src.agents_library.memory import ConversationMemory
 from src.config.settings import settings
 
 
@@ -45,7 +44,6 @@ Existing line
         session_config=ChatSessionConfig(
             bot_user_name="Alice", session_id="s", topic_id="t"
         ),
-        memory=ConversationMemory(),
         agent_folder_path=agent_dir,
     )
 
@@ -104,7 +102,6 @@ Demo role.
         session_config=ChatSessionConfig(
             bot_user_name="Bob", session_id="s2", topic_id="t2"
         ),
-        memory=ConversationMemory(),
         agent_folder_path=agent_dir,
     )
 
@@ -157,7 +154,6 @@ replace_variables:
         session_config=ChatSessionConfig(
             bot_user_name="Ignored", session_id="s", topic_id="t"
         ),
-        memory=ConversationMemory(),
         agent_folder_path=agent_dir,
     )
 
@@ -205,7 +201,6 @@ def variables_to_replace_in_prompt(self: BaseAgent) -> dict[str, str]:
         session_config=ChatSessionConfig(
             bot_user_name="Alice", session_id="s", topic_id="t"
         ),
-        memory=ConversationMemory(),
         agent_folder_path=agent_dir,
     )
 
@@ -249,7 +244,6 @@ Thanks.
         session_config=ChatSessionConfig(
             bot_user_name="Bob", session_id="s", topic_id="t"
         ),
-        memory=ConversationMemory(),
         agent_folder_path=agent_dir,
     )
 
@@ -285,7 +279,6 @@ model: openai/gpt-4o
         session_config=ChatSessionConfig(
             bot_user_name="Bob", session_id="s", topic_id="t"
         ),
-        memory=ConversationMemory(),
         agent_folder_path=agent_dir,
     )
 
