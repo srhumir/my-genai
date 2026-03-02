@@ -3,6 +3,8 @@ from dataclasses import field
 from typing import Literal
 
 from dotenv import load_dotenv
+from pydantic import field_validator
+from pydantic.experimental.missing_sentinel import MISSING
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
@@ -25,7 +27,7 @@ class AgentConfig(ChatBotConfig):
     Required
     - name: Human-friendly agent name.
     - description: Short purpose of the agent.
-    - model: LiteLLM model ID (e.g., "openai/gpt-4o", "anthropic/claude-3-5-sonnet", "azure/<deployment>").
+    - model: provider/model id (e.g., "openai/gpt-4o", "anthropic/claude-3-5-sonnet", "azure/<deployment>").
 
     Optional (common)
     - endpoint: Custom API base URL for the model (Azure/OpenAI proxy). Default: "".
@@ -44,26 +46,17 @@ class AgentConfig(ChatBotConfig):
     - open_mcp_tools: List of publicly availabe MCP tools this agent can call.
 
     Search augmentation
-    - search_context_size: one of {"low", "medium", "high"}. When set and supported, passes web_search_options to ChatClient.
+    - search_context_size: one of {"low", "medium", "high"}.
 
     Prompt templating
-    - replace_variables: key/value pairs to interpolate in system_prompt.md (e.g., { bot_user_name: "John Doe" }).
-
-    API keys (derived at runtime; not stored in YAML)
-    - api_key: Resolved from environment by model prefix:
-      OPEN_API_KEY / AZURE_API_KEY / ANTHROPIC_API_KEY / GOOGLE_API_KEY.
-
-    Notes:
-    - Place a system_prompt.md next to agent_config.yaml. Variables from replace_variables can be referenced.
-    - For proxies (Azure/OpenAI), set endpoint, and ensure the correct env keys are present.
-    - If the model supports tools, define my_mcp_tools to constrain tool usage.
+    - replace_variables: key/value pairs to interpolate in system_prompt.md.
     """
 
-    name: str = "dummy_agent"
-    description: str = "dummy description"
+    name: str = MISSING
+    description: str = MISSING
     replace_variables: dict[str, str] = field(default_factory=dict)
     endpoint: str = ""
-    model: str = "dummy_model"
+    model: str = MISSING
     max_tokens: int = 1000
     temperature: float = 0.3
     top_p: float = 0.95
@@ -75,6 +68,23 @@ class AgentConfig(ChatBotConfig):
     my_mcp_tools: list[str] | None = None
     search_context_size: Literal["low", "medium", "high"] | None = None
     open_mcp_tools: list[str] | None = None
+
+    @field_validator("model")
+    @classmethod
+    def validate_model_format(cls, value: str) -> str:
+        """Validate model format as <provider>/<model-name>."""
+        provider, sep, model_name = value.partition("/")
+        if not sep or not provider or not model_name:
+            raise ValueError(
+                "model must use '<provider>/<model-name>' format (e.g. openai/gpt-4o)"
+            )
+
+        allowed_providers = {"openai", "azure", "anthropic", "google"}
+        if provider not in allowed_providers:
+            raise ValueError(
+                f"model provider must be one of {sorted(allowed_providers)}; got '{provider}'"
+            )
+        return value
 
     @property
     def api_key(self) -> str | None:
@@ -92,7 +102,13 @@ class AgentConfig(ChatBotConfig):
 class Settings(ChatBotConfig):
     MAX_CACHE_SIZE: int = 128
     mcp_server_config: MCPClientConfig = field(default_factory=MCPClientConfig)
-    agent_config: AgentConfig = field(default_factory=AgentConfig)
+    agent_config: AgentConfig = field(
+        default_factory=lambda: AgentConfig(
+            name="default-agent",
+            description="default-agent",
+            model="openai/gpt-4o",
+        )
+    )
 
 
 settings = Settings()

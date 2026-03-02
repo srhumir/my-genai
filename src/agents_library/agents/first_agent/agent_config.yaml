@@ -2,7 +2,7 @@ name: First Agent
 version: 0.0.1
 description: First agent. Use for general purpose tasks.
 endpoint: ""
-model: "gpt-5"
+model: "openai/gpt-5"
 max_tokens: 1000
 temperature: 1
 stream: False
